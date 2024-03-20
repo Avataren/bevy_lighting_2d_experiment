@@ -1,6 +1,6 @@
 use bevy::{prelude::*, window::WindowResolution};
 mod plugins;
-use plugins::{init_game_plugin::InitGamePlugin, light2d::light2d_plugin::Light2DPlugin};
+use plugins::{init_game_plugin::InitGamePlugin, light2d::light2d_plugin::GameOfLifeComputePlugin};
 
 fn main() {
     App::new()
@@ -17,6 +17,6 @@ fn main() {
             }),
             ..default()
         }))
-        .add_plugins((InitGamePlugin, Light2DPlugin))
+        .add_plugins((InitGamePlugin, GameOfLifeComputePlugin))
         .run();
 }

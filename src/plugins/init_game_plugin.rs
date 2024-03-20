@@ -8,6 +8,4 @@ impl Plugin for InitGamePlugin {
     }
 }
 
-fn setup(mut commands: Commands) {
-    commands.spawn(Camera2dBundle::default());
-}
+fn setup(mut commands: Commands) {}
