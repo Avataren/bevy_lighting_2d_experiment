@@ -14,30 +14,12 @@ use bevy::{
         renderer::{RenderContext, RenderDevice},
         Render, RenderApp, RenderSet,
     },
-    window::WindowPlugin,
 };
 use std::borrow::Cow;
 
 const SIZE: (u32, u32) = (1920, 1080);
 const WORKGROUP_SIZE: u32 = 8;
 
-// fn main() {
-//     App::new()
-//         .insert_resource(ClearColor(Color::BLACK))
-//         .add_plugins((
-//             DefaultPlugins.set(WindowPlugin {
-//                 primary_window: Some(Window {
-//                     // uncomment for unthrottled FPS
-//                     // present_mode: bevy::window::PresentMode::AutoNoVsync,
-//                     ..default()
-//                 }),
-//                 ..default()
-//             }),
-//             GameOfLifeComputePlugin,
-//         ))
-//         .add_systems(Startup, setup)
-//         .run();
-// }
 
 fn setup(mut commands: Commands, mut images: ResMut<Assets<Image>>) {
     let mut image = Image::new_fill(
@@ -65,7 +47,7 @@ fn setup(mut commands: Commands, mut images: ResMut<Assets<Image>>) {
     });
     commands.spawn(Camera2dBundle::default());
 
-    commands.insert_resource(GameOfLifeImage { texture: image });
+    commands.insert_resource(SDFImage { texture: image });
 }
 
 pub struct GameOfLifeComputePlugin;
@@ -77,7 +59,7 @@ impl Plugin for GameOfLifeComputePlugin {
     fn build(&self, app: &mut App) {
         // Extract the game of life image resource from the main world into the render world
         // for operation on by the compute shader and display on the sprite.
-        app.add_plugins(ExtractResourcePlugin::<GameOfLifeImage>::default())
+        app.add_plugins(ExtractResourcePlugin::<SDFImage>::default())
             .add_systems(Startup, setup);
         let render_app = app.sub_app_mut(RenderApp);
         render_app.add_systems(
@@ -97,10 +79,18 @@ impl Plugin for GameOfLifeComputePlugin {
 }
 
 #[derive(Resource, Clone, Deref, ExtractResource, AsBindGroup)]
-struct GameOfLifeImage {
+struct SDFImage {
     #[storage_texture(0, image_format = Rgba8Unorm, access = ReadWrite)]
     texture: Handle<Image>,
 }
+
+// Shape definitions
+#[derive(Component)]
+enum Shape {
+    Rectangle { width: f32, height: f32, center: Vec2 },
+    Circle { radius: f32, center: Vec2 },
+}
+
 
 #[derive(Resource)]
 struct GameOfLifeImageBindGroup(BindGroup);
@@ -109,7 +99,7 @@ fn prepare_bind_group(
     mut commands: Commands,
     pipeline: Res<GameOfLifePipeline>,
     gpu_images: Res<RenderAssets<Image>>,
-    game_of_life_image: Res<GameOfLifeImage>,
+    game_of_life_image: Res<SDFImage>,
     render_device: Res<RenderDevice>,
 ) {
     let view = gpu_images.get(&game_of_life_image.texture).unwrap();
@@ -131,10 +121,10 @@ struct GameOfLifePipeline {
 impl FromWorld for GameOfLifePipeline {
     fn from_world(world: &mut World) -> Self {
         let render_device = world.resource::<RenderDevice>();
-        let texture_bind_group_layout = GameOfLifeImage::bind_group_layout(render_device);
+        let texture_bind_group_layout = SDFImage::bind_group_layout(render_device);
         let shader = world
             .resource::<AssetServer>()
-            .load("shaders/game_of_life.wgsl");
+            .load("shaders/sdf.wgsl");
         let pipeline_cache = world.resource::<PipelineCache>();
         let init_pipeline = pipeline_cache.queue_compute_pipeline(ComputePipelineDescriptor {
             label: None,
@@ -150,7 +140,7 @@ impl FromWorld for GameOfLifePipeline {
             push_constant_ranges: Vec::new(),
             shader,
             shader_defs: vec![],
-            entry_point: Cow::from("update"),
+            entry_point: Cow::from("main"),
         });
 
         GameOfLifePipeline {

@@ -17,6 +17,7 @@ fn main() {
             }),
             ..default()
         }))
+        .insert_resource(Msaa::Off)
         .add_plugins((InitGamePlugin, GameOfLifeComputePlugin))
         .run();
 }
