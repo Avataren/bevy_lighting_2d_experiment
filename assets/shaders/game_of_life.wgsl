@@ -20,7 +20,7 @@ fn init(@builtin(global_invocation_id) invocation_id: vec3<u32>, @builtin(num_wo
     let location = vec2<i32>(i32(invocation_id.x), i32(invocation_id.y));
 
     let randomNumber = randomFloat(invocation_id.y * num_workgroups.x + invocation_id.x);
-    let alive = randomNumber > 0.9;
+    let alive = randomNumber > 0.5;
     let color = vec4<f32>(f32(alive));
 
     textureStore(texture, location, color);

@@ -18,7 +18,7 @@ use bevy::{
 };
 use std::borrow::Cow;
 
-const SIZE: (u32, u32) = (1280, 720);
+const SIZE: (u32, u32) = (1920, 1080);
 const WORKGROUP_SIZE: u32 = 8;
 
 // fn main() {
