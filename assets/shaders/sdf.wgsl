@@ -27,13 +27,19 @@ fn main(@builtin(global_invocation_id) invocation_id: vec3<u32>) {
     // Normalize the invocation_id to get UV coordinates in the range [0.0, 1.0]
     let uv = vec2<f32>(f32(invocation_id.x), f32(invocation_id.y)) / vec2<f32>(1920.0, 1080.0);
     let center = vec2<f32>(0.5, 0.5);
-    let sdf = sdf_round_rect(uv - center, vec2<f32>(0.1, 0.1 * 16.0/9.0), 0.05);
+    //let d = sdf_round_rect(uv - center, vec2<f32>(0.1, 0.1 * 16.0/9.0), 0.05);
+    var d = sdf_rect(uv - center, vec2<f32>(0.1, 0.1 * 16.0/9.0));
+    d = min( d, sdf_rect(uv - center -  vec2<f32>(0.2, 0.2) , vec2<f32>(0.05, 0.05 * 16.0/9.0)));
+    d = min( d, sdf_rect(uv - center +  vec2<f32>(0.3, 0.2) , vec2<f32>(0.1, 0.05 * 16.0/9.0)));
     
-    var color: vec4<f32>;
-    if (sdf < 0.0) {
-        color = vec4<f32>(-sdf, 0.0, 0.0, 1.0);
-    } else {
-        color = vec4<f32>(0.0, sdf, sdf, 1.0);
-    }
-    textureStore(texture, vec2<i32>(invocation_id.xy), color);
+    //var4 col: vec4<f32>;
+    
+    var col: vec4<f32>;
+    col = select(vec4<f32>(0.95,0.6,0.1, 1.0), vec4<f32>(0.45,0.55,1.0, 1.0), d>0.0);
+
+	col *= 1.0 - exp(-8.0*abs(d));
+	col *= 0.8 + 0.2*cos(1024.0*abs(d));
+	col = mix( col, vec4<f32>(1.0), 1.0-smoothstep(0.0,0.0015,abs(d)) );
+
+    textureStore(texture, vec2<i32>(invocation_id.xy), col);
 }
