@@ -20,7 +20,6 @@ use std::borrow::Cow;
 const SIZE: (u32, u32) = (1920, 1080);
 const WORKGROUP_SIZE: u32 = 8;
 
-
 fn setup(mut commands: Commands, mut images: ResMut<Assets<Image>>) {
     let mut image = Image::new_fill(
         Extent3d {
@@ -68,13 +67,13 @@ impl Plugin for GameOfLifeComputePlugin {
         );
 
         let mut render_graph = render_app.world.resource_mut::<RenderGraph>();
-        render_graph.add_node(GameOfLifeLabel, GameOfLifeNode::default());
+        render_graph.add_node(GameOfLifeLabel, SDFNode::default());
         render_graph.add_node_edge(GameOfLifeLabel, bevy::render::graph::CameraDriverLabel);
     }
 
     fn finish(&self, app: &mut App) {
         let render_app = app.sub_app_mut(RenderApp);
-        render_app.init_resource::<GameOfLifePipeline>();
+        render_app.init_resource::<SDFPipeline>();
     }
 }
 
@@ -87,17 +86,23 @@ struct SDFImage {
 // Shape definitions
 #[derive(Component)]
 enum Shape {
-    Rectangle { width: f32, height: f32, center: Vec2 },
-    Circle { radius: f32, center: Vec2 },
+    Rectangle {
+        width: f32,
+        height: f32,
+        center: Vec2,
+    },
+    Circle {
+        radius: f32,
+        center: Vec2,
+    },
 }
 
-
 #[derive(Resource)]
-struct GameOfLifeImageBindGroup(BindGroup);
+struct SDFImageBindGroup(BindGroup);
 
 fn prepare_bind_group(
     mut commands: Commands,
-    pipeline: Res<GameOfLifePipeline>,
+    pipeline: Res<SDFPipeline>,
     gpu_images: Res<RenderAssets<Image>>,
     game_of_life_image: Res<SDFImage>,
     render_device: Res<RenderDevice>,
@@ -108,23 +113,21 @@ fn prepare_bind_group(
         &pipeline.texture_bind_group_layout,
         &BindGroupEntries::single(&view.texture_view),
     );
-    commands.insert_resource(GameOfLifeImageBindGroup(bind_group));
+    commands.insert_resource(SDFImageBindGroup(bind_group));
 }
 
 #[derive(Resource)]
-struct GameOfLifePipeline {
+struct SDFPipeline {
     texture_bind_group_layout: BindGroupLayout,
     init_pipeline: CachedComputePipelineId,
     update_pipeline: CachedComputePipelineId,
 }
 
-impl FromWorld for GameOfLifePipeline {
+impl FromWorld for SDFPipeline {
     fn from_world(world: &mut World) -> Self {
         let render_device = world.resource::<RenderDevice>();
         let texture_bind_group_layout = SDFImage::bind_group_layout(render_device);
-        let shader = world
-            .resource::<AssetServer>()
-            .load("shaders/sdf.wgsl");
+        let shader = world.resource::<AssetServer>().load("shaders/sdf.wgsl");
         let pipeline_cache = world.resource::<PipelineCache>();
         let init_pipeline = pipeline_cache.queue_compute_pipeline(ComputePipelineDescriptor {
             label: None,
@@ -143,7 +146,7 @@ impl FromWorld for GameOfLifePipeline {
             entry_point: Cow::from("main"),
         });
 
-        GameOfLifePipeline {
+        SDFPipeline {
             texture_bind_group_layout,
             init_pipeline,
             update_pipeline,
@@ -151,46 +154,46 @@ impl FromWorld for GameOfLifePipeline {
     }
 }
 
-enum GameOfLifeState {
+enum SDFState {
     Loading,
     Init,
     Update,
 }
 
-struct GameOfLifeNode {
-    state: GameOfLifeState,
+struct SDFNode {
+    state: SDFState,
 }
 
-impl Default for GameOfLifeNode {
+impl Default for SDFNode {
     fn default() -> Self {
         Self {
-            state: GameOfLifeState::Loading,
+            state: SDFState::Loading,
         }
     }
 }
 
-impl render_graph::Node for GameOfLifeNode {
+impl render_graph::Node for SDFNode {
     fn update(&mut self, world: &mut World) {
-        let pipeline = world.resource::<GameOfLifePipeline>();
+        let pipeline = world.resource::<SDFPipeline>();
         let pipeline_cache = world.resource::<PipelineCache>();
 
         // if the corresponding pipeline has loaded, transition to the next stage
         match self.state {
-            GameOfLifeState::Loading => {
+            SDFState::Loading => {
                 if let CachedPipelineState::Ok(_) =
                     pipeline_cache.get_compute_pipeline_state(pipeline.init_pipeline)
                 {
-                    self.state = GameOfLifeState::Init;
+                    self.state = SDFState::Init;
                 }
             }
-            GameOfLifeState::Init => {
+            SDFState::Init => {
                 if let CachedPipelineState::Ok(_) =
                     pipeline_cache.get_compute_pipeline_state(pipeline.update_pipeline)
                 {
-                    self.state = GameOfLifeState::Update;
+                    self.state = SDFState::Update;
                 }
             }
-            GameOfLifeState::Update => {}
+            SDFState::Update => {}
         }
     }
 
@@ -200,9 +203,9 @@ impl render_graph::Node for GameOfLifeNode {
         render_context: &mut RenderContext,
         world: &World,
     ) -> Result<(), render_graph::NodeRunError> {
-        let texture_bind_group = &world.resource::<GameOfLifeImageBindGroup>().0;
+        let texture_bind_group = &world.resource::<SDFImageBindGroup>().0;
         let pipeline_cache = world.resource::<PipelineCache>();
-        let pipeline = world.resource::<GameOfLifePipeline>();
+        let pipeline = world.resource::<SDFPipeline>();
 
         let mut pass = render_context
             .command_encoder()
@@ -212,15 +215,15 @@ impl render_graph::Node for GameOfLifeNode {
 
         // select the pipeline based on the current state
         match self.state {
-            GameOfLifeState::Loading => {}
-            GameOfLifeState::Init => {
+            SDFState::Loading => {}
+            SDFState::Init => {
                 let init_pipeline = pipeline_cache
                     .get_compute_pipeline(pipeline.init_pipeline)
                     .unwrap();
                 pass.set_pipeline(init_pipeline);
                 pass.dispatch_workgroups(SIZE.0 / WORKGROUP_SIZE, SIZE.1 / WORKGROUP_SIZE, 1);
             }
-            GameOfLifeState::Update => {
+            SDFState::Update => {
                 let update_pipeline = pipeline_cache
                     .get_compute_pipeline(pipeline.update_pipeline)
                     .unwrap();
