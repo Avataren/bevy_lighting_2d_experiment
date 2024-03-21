@@ -1,8 +1,3 @@
-//! A compute shader that simulates Conway's Game of Life.
-//!
-//! Compute shaders use the GPU for computing arbitrary information, that may be independent of what
-//! is rendered to the screen.
-
 use bevy::{
     prelude::*,
     render::{
@@ -49,14 +44,14 @@ fn setup(mut commands: Commands, mut images: ResMut<Assets<Image>>) {
     commands.insert_resource(SDFImage { texture: image });
 }
 
-pub struct GameOfLifeComputePlugin;
+pub struct SDFComputePlugin;
 
 #[derive(Debug, Hash, PartialEq, Eq, Clone, RenderLabel)]
-struct GameOfLifeLabel;
+struct SDFNodeLabel;
 
-impl Plugin for GameOfLifeComputePlugin {
+impl Plugin for SDFComputePlugin {
     fn build(&self, app: &mut App) {
-        // Extract the game of life image resource from the main world into the render world
+        // Extract the resources from the main world into the render world
         // for operation on by the compute shader and display on the sprite.
         app.add_plugins(ExtractResourcePlugin::<SDFImage>::default())
             .add_systems(Startup, setup);
@@ -67,8 +62,8 @@ impl Plugin for GameOfLifeComputePlugin {
         );
 
         let mut render_graph = render_app.world.resource_mut::<RenderGraph>();
-        render_graph.add_node(GameOfLifeLabel, SDFNode::default());
-        render_graph.add_node_edge(GameOfLifeLabel, bevy::render::graph::CameraDriverLabel);
+        render_graph.add_node(SDFNodeLabel, SDFNode::default());
+        render_graph.add_node_edge(SDFNodeLabel, bevy::render::graph::CameraDriverLabel);
     }
 
     fn finish(&self, app: &mut App) {
@@ -104,10 +99,10 @@ fn prepare_bind_group(
     mut commands: Commands,
     pipeline: Res<SDFPipeline>,
     gpu_images: Res<RenderAssets<Image>>,
-    game_of_life_image: Res<SDFImage>,
+    sdf_image: Res<SDFImage>,
     render_device: Res<RenderDevice>,
 ) {
-    let view = gpu_images.get(&game_of_life_image.texture).unwrap();
+    let view = gpu_images.get(&sdf_image.texture).unwrap();
     let bind_group = render_device.create_bind_group(
         None,
         &pipeline.texture_bind_group_layout,
