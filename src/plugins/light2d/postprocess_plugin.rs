@@ -7,8 +7,10 @@
 
 use bevy::{
     core_pipeline::{
+        bloom::BloomSettings,
         core_2d::graph::{Core2d, Node2d},
         fullscreen_vertex_shader::fullscreen_shader_vertex_state,
+        tonemapping::Tonemapping,
     },
     ecs::query::QueryItem,
     prelude::*,
@@ -50,7 +52,8 @@ impl Plugin for PostProcessPlugin {
         ));
 
         app.add_systems(Startup, setup)
-            .add_systems(Update, (rotate, update_settings));
+            //.add_systems(Update, update_settings)
+            ;
         // We need to get the render app from the main app
         let Ok(render_app) = app.get_sub_app_mut(RenderApp) else {
             return;
@@ -261,7 +264,7 @@ impl FromWorld for PostProcessPipeline {
                     // It can be anything as long as it matches here and in the shader.
                     entry_point: "fragment".into(),
                     targets: vec![Some(ColorTargetState {
-                        format: TextureFormat::bevy_default(),
+                        format: TextureFormat::Rgba16Float,
                         blend: None,
                         write_mask: ColorWrites::ALL,
                     })],
@@ -300,63 +303,57 @@ fn setup(
     // camera
     commands.spawn((
         Camera2dBundle {
-            // transform: Transform::from_translation(Vec3::new(0.0, 0.0, 5.0))
+            transform: Transform::from_translation(Vec3::new(0.0, 0.0, 5.0)),
             //     .looking_at(Vec3::default(), Vec3::Y),
-            // camera: Camera {
-            //     clear_color: Color::WHITE.into(),
-            //     ..default()
-            // },
+            camera: Camera {
+                clear_color: Color::BLACK.into(),
+                hdr: true,
+                ..default()
+            },
+            tonemapping: Tonemapping::TonyMcMapface,
             ..default()
+        },
+        BloomSettings {
+            intensity: 0.5,
+            low_frequency_boost: 0.15,
+            high_pass_frequency: 0.8,
+            ..Default::default()
         },
         // Add the setting to the camera.
         // This component is also used to determine on which camera to run the post processing effect.
         PostProcessSettings {
-            intensity: 0.002,
+            intensity: 0.0,
             ..default()
         },
     ));
 
     // cube
-    commands.spawn((
-        PbrBundle {
-            mesh: meshes.add(Cuboid::default()),
-            material: materials.add(Color::rgb(0.8, 0.7, 0.6)),
-            transform: Transform::from_xyz(0.0, 0.5, 0.0),
-            ..default()
-        },
-        Rotates,
-    ));
-    // light
-    commands.spawn(DirectionalLightBundle {
-        directional_light: DirectionalLight {
-            illuminance: 1_000.,
-            ..default()
-        },
+    commands.spawn((PbrBundle {
+        mesh: meshes.add(Cuboid::default()),
+        material: materials.add(Color::rgb(0.8, 0.7, 0.6)),
+        transform: Transform::from_xyz(0.0, 0.5, 0.0),
         ..default()
-    });
-}
-
-#[derive(Component)]
-struct Rotates;
-
-/// Rotates any entity around the x and y axis
-fn rotate(time: Res<Time>, mut query: Query<&mut Transform, With<Rotates>>) {
-    for mut transform in &mut query {
-        transform.rotate_x(0.55 * time.delta_seconds());
-        transform.rotate_z(0.15 * time.delta_seconds());
-    }
+    },));
+    // light
+    // commands.spawn(DirectionalLightBundle {
+    //     directional_light: DirectionalLight {
+    //         illuminance: 1_000.,
+    //         ..default()
+    //     },
+    //     ..default()
+    // });
 }
 
 // Change the intensity over time to show that the effect is controlled from the main world
 fn update_settings(mut settings: Query<&mut PostProcessSettings>, time: Res<Time>) {
     for mut setting in &mut settings {
-        let mut intensity = (time.elapsed_seconds() * 3.0).sin();
+        let mut intensity = (time.elapsed_seconds() * 5.0).sin();
         // Make it loop periodically
         intensity = intensity.sin();
         // Remap it to 0..1 because the intensity can't be negative
         intensity = intensity * 0.5 + 0.5;
         // Scale it to a more reasonable level
-        intensity *= 0.015;
+        intensity *= 0.005;
 
         // Set the intensity.
         // This will then be extracted to the render world and uploaded to the gpu automatically by the [`UniformComponentPlugin`]

@@ -1,13 +1,16 @@
 use bevy::{
     prelude::*,
     render::{
+        //extract_component::ComponentUniforms,
+        extract_component::{ExtractComponent, ExtractComponentPlugin},
         extract_resource::{ExtractResource, ExtractResourcePlugin},
-        render_asset::RenderAssetUsages,
-        render_asset::RenderAssets,
+        render_asset::{RenderAssetUsages, RenderAssets},
         render_graph::{self, RenderGraph, RenderLabel},
         render_resource::*,
         renderer::{RenderContext, RenderDevice},
-        Render, RenderApp, RenderSet,
+        Render,
+        RenderApp,
+        RenderSet,
     },
 };
 use std::borrow::Cow;
@@ -31,14 +34,18 @@ fn setup(mut commands: Commands, mut images: ResMut<Assets<Image>>) {
         TextureUsages::COPY_DST | TextureUsages::STORAGE_BINDING | TextureUsages::TEXTURE_BINDING;
     let image = images.add(image);
 
-    commands.spawn(SpriteBundle {
-        sprite: Sprite {
-            custom_size: Some(Vec2::new(SIZE.0 as f32, SIZE.1 as f32)),
+    //commands.insert_resource(CameraData::default());
+
+    commands
+        .spawn(SpriteBundle {
+            sprite: Sprite {
+                custom_size: Some(Vec2::new(SIZE.0 as f32, SIZE.1 as f32)),
+                ..default()
+            },
+            texture: image.clone(),
             ..default()
-        },
-        texture: image.clone(),
-        ..default()
-    });
+        })
+        .insert(CameraData::default());
     //commands.spawn(Camera2dBundle::default());
 
     commands.insert_resource(SDFImage { texture: image });
@@ -54,7 +61,9 @@ impl Plugin for SDFComputePlugin {
         // Extract the resources from the main world into the render world
         // for operation on by the compute shader and display on the sprite.
         app.add_plugins(ExtractResourcePlugin::<SDFImage>::default())
-            .add_systems(Startup, setup);
+            .add_plugins(ExtractComponentPlugin::<CameraData>::default())
+            .add_systems(Startup, setup)
+            .add_systems(Update, update_camera_data);
         let render_app = app.sub_app_mut(RenderApp);
         render_app.add_systems(
             Render,
@@ -72,24 +81,34 @@ impl Plugin for SDFComputePlugin {
     }
 }
 
+fn update_camera_data(cam_q: Query<(&Camera, &Transform)>, mut cam_data_q: Query<&mut CameraData>) {
+    for (cam, transform) in cam_q.iter() {
+        for mut cam_data in cam_data_q.iter_mut() {
+            cam_data.view_matrix = transform.compute_matrix().inverse();
+            cam_data.proj_matrix = cam.projection_matrix();
+        }
+    }
+}
+
 #[derive(Resource, Clone, Deref, ExtractResource, AsBindGroup)]
 struct SDFImage {
     #[storage_texture(0, image_format = Rgba8Unorm, access = ReadWrite)]
     texture: Handle<Image>,
 }
 
-// Shape definitions
-#[derive(Component)]
-enum Shape {
-    Rectangle {
-        width: f32,
-        height: f32,
-        center: Vec2,
-    },
-    Circle {
-        radius: f32,
-        center: Vec2,
-    },
+#[derive(Component, Clone, Copy, ExtractComponent, ShaderType)]
+struct CameraData {
+    view_matrix: Mat4,
+    proj_matrix: Mat4,
+}
+
+impl Default for CameraData {
+    fn default() -> Self {
+        Self {
+            view_matrix: Mat4::IDENTITY,
+            proj_matrix: Mat4::IDENTITY,
+        }
+    }
 }
 
 #[derive(Resource)]

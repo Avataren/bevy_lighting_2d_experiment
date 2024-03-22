@@ -11,7 +11,7 @@ fn main() {
             primary_window: Some(Window {
                 canvas: Some("#game-canvas".to_string()),
                 title: "Light2D".to_string(),
-                resizable: true,
+                resizable: false,
                 //mode: WindowMode::BorderlessFullscreen,
                 resolution: WindowResolution::new(1920., 1080.),
                 prevent_default_event_handling: false,

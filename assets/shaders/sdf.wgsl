@@ -1,4 +1,10 @@
+struct CameraData {
+    viewMatrix: mat4x4<f32>,
+    projMatrix: mat4x4<f32>,
+};
+
 @group(0) @binding(0) var texture: texture_storage_2d<rgba8unorm, read_write>;
+@group(0) @binding(1) var<uniform> cameraData: CameraData;
 
 fn sdf_circle(p: vec2<f32>, r: f32) -> f32
 {
@@ -44,11 +50,11 @@ fn main(@builtin(global_invocation_id) invocation_id: vec3<u32>) {
    
 
     var col: vec4<f32>;
-    col = select(vec4<f32>(0.95,0.3,0.1, 1.0), vec4<f32>(0.25,0.55,1.0, 1.0), d>0.0);
+    col = select(vec4<f32>(0.95,0.4,0.06, 1.0), vec4<f32>(0.15,0.35,1.0, 0.9), d>0.0);
 
-	col *= 1.0 - exp(-8.0*abs(d));
-	col *= 0.8 + 0.2*cos(1024.0*abs(d));
+	col *= 1.0 - exp(-6.0*abs(d));
+	col *= 0.8 + 0.2*cos(512.0*abs(d));
 	col = mix( col, vec4<f32>(1.0), 1.0-smoothstep(0.0,0.0015,abs(d)) );
-
+    col.a = 1.0;
     textureStore(texture, vec2<i32>(invocation_id.xy), col);
 }
