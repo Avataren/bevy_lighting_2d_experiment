@@ -1,6 +1,9 @@
 use bevy::{prelude::*, window::WindowResolution};
 mod plugins;
-use plugins::{init_game_plugin::InitGamePlugin, light2d::light2d_plugin::SDFComputePlugin};
+use plugins::{
+    init_game_plugin::InitGamePlugin, light2d::light2d_plugin::SDFComputePlugin,
+    light2d::postprocess_plugin::PostProcessPlugin,
+};
 
 fn main() {
     App::new()
@@ -18,6 +21,6 @@ fn main() {
             ..default()
         }))
         .insert_resource(Msaa::Off)
-        .add_plugins((InitGamePlugin, SDFComputePlugin))
+        .add_plugins((InitGamePlugin, SDFComputePlugin, PostProcessPlugin))
         .run();
 }

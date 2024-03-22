@@ -39,7 +39,7 @@ fn setup(mut commands: Commands, mut images: ResMut<Assets<Image>>) {
         texture: image.clone(),
         ..default()
     });
-    commands.spawn(Camera2dBundle::default());
+    //commands.spawn(Camera2dBundle::default());
 
     commands.insert_resource(SDFImage { texture: image });
 }
