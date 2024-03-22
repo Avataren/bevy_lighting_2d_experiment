@@ -44,7 +44,7 @@ fn main(@builtin(global_invocation_id) invocation_id: vec3<u32>) {
    
 
     var col: vec4<f32>;
-    col = select(vec4<f32>(0.95,0.6,0.1, 1.0), vec4<f32>(0.45,0.55,1.0, 1.0), d>0.0);
+    col = select(vec4<f32>(0.95,0.3,0.1, 1.0), vec4<f32>(0.25,0.55,1.0, 1.0), d>0.0);
 
 	col *= 1.0 - exp(-8.0*abs(d));
 	col *= 0.8 + 0.2*cos(1024.0*abs(d));
