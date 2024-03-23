@@ -2234,6 +2234,7 @@ name = "lighting"
 version = "0.1.0"
 dependencies = [
  "bevy",
+ "bytemuck",
 ]
 
 [[package]]

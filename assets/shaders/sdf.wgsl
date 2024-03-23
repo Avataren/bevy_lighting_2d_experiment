@@ -1,10 +1,7 @@
-struct CameraData {
-    viewMatrix: mat4x4<f32>,
-    projMatrix: mat4x4<f32>,
-};
-
 @group(0) @binding(0) var texture: texture_storage_2d<rgba8unorm, read_write>;
-@group(0) @binding(1) var<uniform> cameraData: CameraData;
+@group(0) @binding(1) var<uniform> viewMatrix: mat4x4<f32>;
+@group(0) @binding(2) var<uniform> projMatrix: mat4x4<f32>;
+@group(0) @binding(3) var<uniform> time: f32;
 
 fn sdf_circle(p: vec2<f32>, r: f32) -> f32
 {
@@ -41,14 +38,16 @@ fn main(@builtin(global_invocation_id) invocation_id: vec3<u32>) {
     // Normalize the invocation_id to get UV coordinates in the range [0.0, 1.0]
     let aspect = f32(textureSize.x) / f32(textureSize.y);
     let uv = (vec2<f32>(f32(invocation_id.x), f32(invocation_id.y) ) / textureSizeF32 - vec2<f32>(0.5, 0.5)) * vec2<f32>(-aspect, 1.0);
-    
+    let ts = sin(time) * 0.1;
+    let tc = cos(time) * 0.3;
+
     let center = vec2<f32>(0.0, 0.0);
     var d = sdf_rect(uv - center, vec2<f32>(0.15, 0.15));
     d = min( d, sdf_round_rect(uv  -  vec2<f32>(0.3, 0.2) , vec2<f32>(0.05, 0.05 ), 0.01));
-    d = min( d, sdf_rect(uv +  vec2<f32>(0.3, 0.2) , vec2<f32>(0.1, 0.05 )));
+    d = min( d, sdf_rect(uv +  vec2<f32>(0.3 + tc, 0.2 + ts) , vec2<f32>(0.1, 0.05 )));
     d = min( d, sdf_circle(uv +  vec2<f32>(0.2, 0.4) , 0.05));
    
-
+   
     var col: vec4<f32>;
     col = select(vec4<f32>(0.95,0.4,0.06, 1.0), vec4<f32>(0.15,0.35,1.0, 0.9), d>0.0);
 

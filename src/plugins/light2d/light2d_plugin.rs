@@ -1,8 +1,11 @@
 use bevy::{
+    ecs::query::QueryItem,
     prelude::*,
     render::{
         //extract_component::ComponentUniforms,
-        extract_component::{ExtractComponent, ExtractComponentPlugin},
+        extract_component::{
+            ComponentUniforms, ExtractComponent, ExtractComponentPlugin, UniformComponentPlugin,
+        },
         extract_resource::{ExtractResource, ExtractResourcePlugin},
         render_asset::{RenderAssetUsages, RenderAssets},
         render_graph::{self, RenderGraph, RenderLabel},
@@ -34,21 +37,29 @@ fn setup(mut commands: Commands, mut images: ResMut<Assets<Image>>) {
         TextureUsages::COPY_DST | TextureUsages::STORAGE_BINDING | TextureUsages::TEXTURE_BINDING;
     let image = images.add(image);
 
-    //commands.insert_resource(CameraData::default());
+    //commands.spawn(CameraData::default());
 
-    commands
-        .spawn(SpriteBundle {
-            sprite: Sprite {
-                custom_size: Some(Vec2::new(SIZE.0 as f32, SIZE.1 as f32)),
-                ..default()
-            },
-            texture: image.clone(),
+    commands.spawn(SpriteBundle {
+        sprite: Sprite {
+            custom_size: Some(Vec2::new(SIZE.0 as f32, SIZE.1 as f32)),
             ..default()
-        })
-        .insert(CameraData::default());
+        },
+        texture: image.clone(),
+        ..default()
+    });
+
     //commands.spawn(Camera2dBundle::default());
 
-    commands.insert_resource(SDFImage { texture: image });
+    commands.insert_resource(SDFImage {
+        texture: image,
+        view_matrix: Mat4::IDENTITY,
+        proj_matrix: Mat4::IDENTITY,
+        time: 0.0,
+    });
+}
+
+fn update_time(time: Res<Time>, mut sdf_image: ResMut<SDFImage>) {
+    sdf_image.time = time.elapsed_seconds();
 }
 
 pub struct SDFComputePlugin;
@@ -61,9 +72,12 @@ impl Plugin for SDFComputePlugin {
         // Extract the resources from the main world into the render world
         // for operation on by the compute shader and display on the sprite.
         app.add_plugins(ExtractResourcePlugin::<SDFImage>::default())
-            .add_plugins(ExtractComponentPlugin::<CameraData>::default())
+            // .add_plugins((
+            //     ExtractComponentPlugin::<CameraData>::default(),
+            //     UniformComponentPlugin::<CameraData>::default()
+            // ))
             .add_systems(Startup, setup)
-            .add_systems(Update, update_camera_data);
+            .add_systems(Update, (update_camera_data, update_time));
         let render_app = app.sub_app_mut(RenderApp);
         render_app.add_systems(
             Render,
@@ -81,35 +95,43 @@ impl Plugin for SDFComputePlugin {
     }
 }
 
-fn update_camera_data(cam_q: Query<(&Camera, &Transform)>, mut cam_data_q: Query<&mut CameraData>) {
+fn update_camera_data(cam_q: Query<(&Camera, &Transform)>, mut cam_data: ResMut<SDFImage>) {
     for (cam, transform) in cam_q.iter() {
-        for mut cam_data in cam_data_q.iter_mut() {
-            cam_data.view_matrix = transform.compute_matrix().inverse();
-            cam_data.proj_matrix = cam.projection_matrix();
-        }
+        //let mut cam_data = cam_data;
+        cam_data.view_matrix = transform.compute_matrix().inverse();
+        cam_data.proj_matrix = cam.projection_matrix();
     }
 }
+
+//#[derive(Component, Clone, Copy, ExtractComponent, ShaderType)]
+// struct CameraData {
+//     view_matrix: Mat4,
+//     proj_matrix: Mat4,
+// }
 
 #[derive(Resource, Clone, Deref, ExtractResource, AsBindGroup)]
 struct SDFImage {
+    #[deref]
     #[storage_texture(0, image_format = Rgba8Unorm, access = ReadWrite)]
     texture: Handle<Image>,
-}
-
-#[derive(Component, Clone, Copy, ExtractComponent, ShaderType)]
-struct CameraData {
+    #[uniform(1)]
     view_matrix: Mat4,
+    #[uniform(2)]
     proj_matrix: Mat4,
+    #[uniform(3)]
+    time: f32,
+    #[cfg(feature = "webgl2")]
+    _webgl2_padding: Vec3,
 }
 
-impl Default for CameraData {
-    fn default() -> Self {
-        Self {
-            view_matrix: Mat4::IDENTITY,
-            proj_matrix: Mat4::IDENTITY,
-        }
-    }
-}
+// impl Default for CameraData {
+//     fn default() -> Self {
+//         Self {
+//             view_matrix: Mat4::IDENTITY,
+//             proj_matrix: Mat4::IDENTITY,
+//         }
+//     }
+// }
 
 #[derive(Resource)]
 struct SDFImageBindGroup(BindGroup);
@@ -120,13 +142,68 @@ fn prepare_bind_group(
     gpu_images: Res<RenderAssets<Image>>,
     sdf_image: Res<SDFImage>,
     render_device: Res<RenderDevice>,
+    world: &World,
 ) {
     let view = gpu_images.get(&sdf_image.texture).unwrap();
+
+    // Convert Mat4 matrices and f32 time into byte slices
+    let view_matrix_bytes = bytemuck::bytes_of(&sdf_image.view_matrix);
+    let proj_matrix_bytes = bytemuck::bytes_of(&sdf_image.proj_matrix);
+    let time_bytes = bytemuck::bytes_of(&sdf_image.time);
+
+    // Create buffers for view matrix, proj matrix, and time
+    let view_matrix_buffer = render_device.create_buffer_with_data(&BufferInitDescriptor {
+        label: Some("view matrix buffer"),
+        contents: view_matrix_bytes,
+        usage: BufferUsages::UNIFORM | BufferUsages::COPY_DST,
+    });
+
+    let proj_matrix_buffer = render_device.create_buffer_with_data(&BufferInitDescriptor {
+        label: Some("proj matrix buffer"),
+        contents: proj_matrix_bytes,
+        usage: BufferUsages::UNIFORM | BufferUsages::COPY_DST,
+    });
+
+    let time_buffer = render_device.create_buffer_with_data(&BufferInitDescriptor {
+        label: Some("time buffer"),
+        contents: time_bytes,
+        usage: BufferUsages::UNIFORM | BufferUsages::COPY_DST,
+    });
     let bind_group = render_device.create_bind_group(
-        None,
-        &pipeline.texture_bind_group_layout,
-        &BindGroupEntries::single(&view.texture_view),
+        None, // Label for debugging
+        &pipeline.texture_bind_group_layout, // The layout this bind group is based on
+        &[ // Array of entries
+            BindGroupEntry {
+                binding: 0,
+                resource: BindingResource::TextureView(&view.texture_view), // Texture view as a resource
+            },
+            BindGroupEntry {
+                binding: 1,
+                resource: BindingResource::Buffer(BufferBinding { // Buffer binding for the view matrix
+                    buffer: &view_matrix_buffer,
+                    offset: 0,
+                    size: None, // Use the full size of the buffer
+                }),
+            },
+            BindGroupEntry {
+                binding: 2,
+                resource: BindingResource::Buffer(BufferBinding { // Buffer binding for the projection matrix
+                    buffer: &proj_matrix_buffer,
+                    offset: 0,
+                    size: None,
+                }),
+            },
+            BindGroupEntry {
+                binding: 3,
+                resource: BindingResource::Buffer(BufferBinding { // Buffer binding for the time value
+                    buffer: &time_buffer,
+                    offset: 0,
+                    size: None,
+                }),
+            },
+        ],
     );
+    
     commands.insert_resource(SDFImageBindGroup(bind_group));
 }
 
@@ -141,6 +218,7 @@ impl FromWorld for SDFPipeline {
     fn from_world(world: &mut World) -> Self {
         let render_device = world.resource::<RenderDevice>();
         let texture_bind_group_layout = SDFImage::bind_group_layout(render_device);
+        //let cam_data_layout = CameraData::bind_group_layout(render_device);
         let shader = world.resource::<AssetServer>().load("shaders/sdf.wgsl");
         let pipeline_cache = world.resource::<PipelineCache>();
         let init_pipeline = pipeline_cache.queue_compute_pipeline(ComputePipelineDescriptor {

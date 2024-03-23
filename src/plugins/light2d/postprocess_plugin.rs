@@ -74,7 +74,7 @@ impl Plugin for PostProcessPlugin {
             // The [`ViewNodeRunner`] is a special [`Node`] that will automatically run the node for each view
             // matching the [`ViewQuery`]
             .add_render_graph_node::<ViewNodeRunner<PostProcessNode>>(
-                // Specify the label of the graph, in this case we want the graph for 3d
+                // Specify the label of the graph, in this case we want the graph for 2d
                 Core2d,
                 // It also needs the label of the node
                 PostProcessLabel,
