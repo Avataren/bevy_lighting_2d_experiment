@@ -52,7 +52,7 @@ impl Plugin for PostProcessPlugin {
         ));
 
         app.add_systems(Startup, setup)
-            //.add_systems(Update, update_settings)
+            .add_systems(Update, update_settings)
             ;
         // We need to get the render app from the main app
         let Ok(render_app) = app.get_sub_app_mut(RenderApp) else {

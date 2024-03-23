@@ -42,10 +42,10 @@ fn main(@builtin(global_invocation_id) invocation_id: vec3<u32>) {
     let tc = cos(time) * 0.3;
 
     let center = vec2<f32>(0.0, 0.0);
-    var d = sdf_rect(uv - center, vec2<f32>(0.15, 0.15));
+    var d = sdf_rect(uv - center, vec2<f32>(0.35 - ts+tc, 0.15+ts-tc*0.25));
     d = min( d, sdf_round_rect(uv  -  vec2<f32>(0.3, 0.2) , vec2<f32>(0.05, 0.05 ), 0.01));
     d = min( d, sdf_rect(uv +  vec2<f32>(0.3 + tc, 0.2 + ts) , vec2<f32>(0.1, 0.05 )));
-    d = min( d, sdf_circle(uv +  vec2<f32>(0.2, 0.4) , 0.05));
+    d = min( d, sdf_circle(uv +  vec2<f32>(0.2 + tc*ts*5.0, 0.4-ts*ts*4.0) , 0.05));
    
    
     var col: vec4<f32>;
