@@ -8,4 +8,4 @@ impl Plugin for InitGamePlugin {
     }
 }
 
-fn setup(mut commands: Commands) {}
+fn setup(_commands: Commands) {}

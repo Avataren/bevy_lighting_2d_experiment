@@ -1,11 +1,7 @@
 use bevy::{
-    ecs::query::QueryItem,
     prelude::*,
     render::{
         //extract_component::ComponentUniforms,
-        extract_component::{
-            ComponentUniforms, ExtractComponent, ExtractComponentPlugin, UniformComponentPlugin,
-        },
         extract_resource::{ExtractResource, ExtractResourcePlugin},
         render_asset::{RenderAssetUsages, RenderAssets},
         render_graph::{self, RenderGraph, RenderLabel},
@@ -142,7 +138,7 @@ fn prepare_bind_group(
     gpu_images: Res<RenderAssets<Image>>,
     sdf_image: Res<SDFImage>,
     render_device: Res<RenderDevice>,
-    world: &World,
+    _world: &World,
 ) {
     let view = gpu_images.get(&sdf_image.texture).unwrap();
 
