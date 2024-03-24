@@ -1,7 +1,7 @@
 use bevy::{
-    prelude::*,
-    render::{
+    math::vec4, prelude::*, render::{
         //extract_component::ComponentUniforms,
+        extract_component::ExtractComponent,
         extract_resource::{ExtractResource, ExtractResourcePlugin},
         render_asset::{RenderAssetUsages, RenderAssets},
         render_graph::{self, RenderGraph, RenderLabel},
@@ -10,9 +10,12 @@ use bevy::{
         Render,
         RenderApp,
         RenderSet,
-    },
+    }
 };
-use std::borrow::Cow;
+use std::{
+    borrow::Cow,
+    num::{NonZeroU32, NonZeroU64},
+};
 
 const SIZE: (u32, u32) = (1920, 1080);
 const WORKGROUP_SIZE: u32 = 8;
@@ -46,11 +49,42 @@ fn setup(mut commands: Commands, mut images: ResMut<Assets<Image>>) {
 
     //commands.spawn(Camera2dBundle::default());
 
+    for i in 0..16 {
+        commands
+            .spawn(SpriteBundle {
+                sprite: Sprite {
+                    custom_size: Some(Vec2::new(100.0, 100.0)),
+                    color: Color::srgba(1.0, 0.0, 0.0, 0.25),
+                    ..default()
+                },
+                transform: Transform::from_translation(Vec3::new(
+                    (i as f32 * 110.0) - 800.0,
+                    (i as f32 * 20.0),
+                    0.0,
+                )),
+                visibility: Visibility::Visible ,
+                ..default()
+            })
+            .insert(Occluder {
+                position: Vec4::new(
+                    (i as f32 * 110.0) - 800.0,
+                    (i as f32 * 20.0),
+                    0.0,
+                    0.0,
+                ),
+                data: Vec4::new(100.0, 100.0, 0.0, 0.0),
+            });
+    }
+
     commands.insert_resource(SDFImage {
         texture: image,
-        view_matrix: Mat4::IDENTITY,
-        proj_matrix: Mat4::IDENTITY,
         time: 0.0,
+        num_occluders: 0,
+        occluders: [Occluder {
+            position: Vec4::ZERO,
+            data: Vec4::ZERO,
+        }; 255],
+        view_proj: Mat4::IDENTITY,
     });
 }
 
@@ -91,11 +125,36 @@ impl Plugin for SDFComputePlugin {
     }
 }
 
-fn update_camera_data(cam_q: Query<(&Camera, &Transform)>, mut cam_data: ResMut<SDFImage>) {
-    for (cam, transform) in cam_q.iter() {
-        //let mut cam_data = cam_data;
-        cam_data.view_matrix = transform.compute_matrix().inverse();
-        cam_data.proj_matrix = cam.projection_matrix();
+fn extract_scale_from_matrix(matrix: &Mat4) -> Vec3 {
+    let scale_x = matrix.x_axis.length();
+    let scale_y = matrix.y_axis.length();
+    let scale_z = matrix.z_axis.length();
+    Vec3::new(scale_x, scale_y, scale_z)
+}
+
+
+fn update_camera_data(mut cam_q: Query<(&Camera, &mut Transform, &GlobalTransform)>, mut sdf_data: ResMut<SDFImage>, occ_q: Query<&Occluder>, time: Res<Time>) {
+    for (cam,mut transform, _global_transform) in &mut cam_q {
+
+        let view_matrix = transform.compute_matrix();
+        let proj_matrix = cam.projection_matrix();
+        let view_proj_matrix = proj_matrix * view_matrix.inverse();
+        sdf_data.view_proj = view_proj_matrix;
+        let scale = extract_scale_from_matrix(&view_proj_matrix);
+
+        let transformed_occ = occ_q.iter().map(|occ| {
+            let pos = view_proj_matrix * occ.position; // This results in a Vec4
+            let occ_size = occ.data.xy() * scale.xy() * 0.5;
+            let data = Vec4::new(occ_size.x, occ_size.y, occ.data.z, occ.data.w);
+            Occluder { position: pos, data }
+        });
+
+        sdf_data.num_occluders = transformed_occ.len() as u32;
+
+        transformed_occ.enumerate().for_each(|(i, occ)| {
+            sdf_data.occluders[i] = occ;
+        });
+        
     }
 }
 
@@ -104,6 +163,14 @@ fn update_camera_data(cam_q: Query<(&Camera, &Transform)>, mut cam_data: ResMut<
 //     view_matrix: Mat4,
 //     proj_matrix: Mat4,
 // }
+#[derive(Component, Clone, Copy, ExtractComponent, Default, ShaderType)]
+struct Occluder {
+    position: Vec4,
+    data: Vec4,
+}
+
+unsafe impl bytemuck::Pod for Occluder {}
+unsafe impl bytemuck::Zeroable for Occluder {}
 
 #[derive(Resource, Clone, Deref, ExtractResource, AsBindGroup)]
 struct SDFImage {
@@ -111,11 +178,13 @@ struct SDFImage {
     #[storage_texture(0, image_format = Rgba8Unorm, access = ReadWrite)]
     texture: Handle<Image>,
     #[uniform(1)]
-    view_matrix: Mat4,
-    #[uniform(2)]
-    proj_matrix: Mat4,
-    #[uniform(3)]
     time: f32,
+    #[uniform(2)]
+    num_occluders: u32,
+    #[uniform(3)]
+    occluders: [Occluder; 255],
+    #[uniform(4)]
+    view_proj: Mat4,
     #[cfg(feature = "webgl2")]
     _webgl2_padding: Vec3,
 }
@@ -143,63 +212,86 @@ fn prepare_bind_group(
     let view = gpu_images.get(&sdf_image.texture).unwrap();
 
     // Convert Mat4 matrices and f32 time into byte slices
-    let view_matrix_bytes = bytemuck::bytes_of(&sdf_image.view_matrix);
-    let proj_matrix_bytes = bytemuck::bytes_of(&sdf_image.proj_matrix);
+    let view_proj_matrix_bytes = bytemuck::bytes_of(&sdf_image.view_proj);
+    // let proj_matrix_bytes = bytemuck::bytes_of(&sdf_image.proj_matrix);
     let time_bytes = bytemuck::bytes_of(&sdf_image.time);
-
-    // Create buffers for view matrix, proj matrix, and time
-    let view_matrix_buffer = render_device.create_buffer_with_data(&BufferInitDescriptor {
-        label: Some("view matrix buffer"),
-        contents: view_matrix_bytes,
-        usage: BufferUsages::UNIFORM | BufferUsages::COPY_DST,
-    });
-
-    let proj_matrix_buffer = render_device.create_buffer_with_data(&BufferInitDescriptor {
-        label: Some("proj matrix buffer"),
-        contents: proj_matrix_bytes,
-        usage: BufferUsages::UNIFORM | BufferUsages::COPY_DST,
-    });
+    let num_occluders_bytes = bytemuck::bytes_of(&sdf_image.num_occluders);
+    let occluder_slice: &[Occluder] = &sdf_image.occluders;
+    let occluder_bytes: &[u8] = bytemuck::cast_slice(occluder_slice);
+    let buffer_size = std::mem::size_of::<Occluder>() * 255;
 
     let time_buffer = render_device.create_buffer_with_data(&BufferInitDescriptor {
         label: Some("time buffer"),
         contents: time_bytes,
         usage: BufferUsages::UNIFORM | BufferUsages::COPY_DST,
     });
+
+    let num_occluders_buffer = render_device.create_buffer_with_data(&BufferInitDescriptor {
+        label: Some("num occluders buffer"),
+        contents: num_occluders_bytes,
+        usage: BufferUsages::UNIFORM | BufferUsages::COPY_DST,
+    });
+
+    let occluder_buffer = render_device.create_buffer_with_data(&BufferInitDescriptor {
+        label: Some("occluder buffer"),
+        contents: occluder_bytes,
+        usage: BufferUsages::UNIFORM | BufferUsages::COPY_DST,
+    });
+
+    let view_proj_buffer = render_device.create_buffer_with_data(&BufferInitDescriptor {
+        label: Some("view_proj buffer"),
+        contents: view_proj_matrix_bytes,
+        usage: BufferUsages::UNIFORM | BufferUsages::COPY_DST,
+    });    
+
     let bind_group = render_device.create_bind_group(
-        None, // Label for debugging
+        None,                                // Label for debugging
         &pipeline.texture_bind_group_layout, // The layout this bind group is based on
-        &[ // Array of entries
+        &[
+            // Array of entries
             BindGroupEntry {
                 binding: 0,
                 resource: BindingResource::TextureView(&view.texture_view), // Texture view as a resource
             },
             BindGroupEntry {
                 binding: 1,
-                resource: BindingResource::Buffer(BufferBinding { // Buffer binding for the view matrix
-                    buffer: &view_matrix_buffer,
+                resource: BindingResource::Buffer(BufferBinding {
+                    // Buffer binding for the time value
+                    buffer: &time_buffer,
                     offset: 0,
-                    size: None, // Use the full size of the buffer
+                    size: None,
                 }),
             },
             BindGroupEntry {
                 binding: 2,
-                resource: BindingResource::Buffer(BufferBinding { // Buffer binding for the projection matrix
-                    buffer: &proj_matrix_buffer,
+                resource: BindingResource::Buffer(BufferBinding {
+                    // Buffer binding for the time value
+                    buffer: &num_occluders_buffer,
                     offset: 0,
                     size: None,
                 }),
             },
             BindGroupEntry {
                 binding: 3,
-                resource: BindingResource::Buffer(BufferBinding { // Buffer binding for the time value
-                    buffer: &time_buffer,
+                resource: BindingResource::Buffer(BufferBinding {
+                    // Buffer binding for the time value
+                    buffer: &occluder_buffer,
                     offset: 0,
                     size: None,
                 }),
             },
+            BindGroupEntry {
+                binding: 4,
+                resource: BindingResource::Buffer(BufferBinding {
+                    // Buffer binding for the time value
+                    buffer: &view_proj_buffer,
+                    offset: 0,
+                    size: None,
+                }),
+            },            
         ],
     );
-    
+
     commands.insert_resource(SDFImageBindGroup(bind_group));
 }
 

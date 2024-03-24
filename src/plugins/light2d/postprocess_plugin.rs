@@ -51,7 +51,7 @@ impl Plugin for PostProcessPlugin {
         ));
 
         app.add_systems(Startup, setup)
-            .add_systems(Update, update_settings)
+            //.add_systems(Update, update_settings)
             ;
         // We need to get the render app from the main app
         let Ok(render_app) = app.get_sub_app_mut(RenderApp) else {
@@ -327,12 +327,12 @@ fn setup(
     ));
 
     // cube
-    commands.spawn((PbrBundle {
-        mesh: meshes.add(Cuboid::default()),
-        material: materials.add(Color::rgb(0.8, 0.7, 0.6)),
-        transform: Transform::from_xyz(0.0, 0.5, 0.0),
-        ..default()
-    },));
+    // commands.spawn((PbrBundle {
+    //     mesh: meshes.add(Cuboid::default()),
+    //     material: materials.add(Color::srgb(0.8, 0.7, 0.6)),
+    //     transform: Transform::from_xyz(0.0, 0.5, 0.0),
+    //     ..default()
+    // },));
     // light
     // commands.spawn(DirectionalLightBundle {
     //     directional_light: DirectionalLight {
