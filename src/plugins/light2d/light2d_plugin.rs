@@ -20,6 +20,9 @@ use std::{
 const SIZE: (u32, u32) = (1920, 1080);
 const WORKGROUP_SIZE: u32 = 8;
 
+#[derive(Component, Clone, Copy, Debug, Default)]
+struct SDFVisualizer;
+
 fn setup(mut commands: Commands, mut images: ResMut<Assets<Image>>) {
     let mut image = Image::new_fill(
         Extent3d {
@@ -45,7 +48,7 @@ fn setup(mut commands: Commands, mut images: ResMut<Assets<Image>>) {
         },
         texture: image.clone(),
         ..default()
-    });
+    }).insert(SDFVisualizer);
 
     //commands.spawn(Camera2dBundle::default());
 
@@ -107,7 +110,7 @@ impl Plugin for SDFComputePlugin {
             //     UniformComponentPlugin::<CameraData>::default()
             // ))
             .add_systems(Startup, setup)
-            .add_systems(Update, (update_camera_data, update_time));
+            .add_systems(Update, (update_camera_data, update_time, animate_sprites));
         let render_app = app.sub_app_mut(RenderApp);
         render_app.add_systems(
             Render,
@@ -132,8 +135,27 @@ fn extract_scale_from_matrix(matrix: &Mat4) -> Vec3 {
     Vec3::new(scale_x, scale_y, scale_z)
 }
 
+fn animate_sprites(time: Res<Time>, mut query: Query<&mut Transform, (With<Sprite>, Without<SDFVisualizer>)>) {
+    let mut i = 0.0;
+    for mut transform in &mut query.iter_mut() {
+        //transform.rotate(Quat::from_rotation_z(time.delta_seconds()));
+        let mut x = ((time.elapsed_seconds() + i)* 0.5).sin() * 300.0;
+        let mut y = ((time.elapsed_seconds() + i)* 0.5).cos() * 300.0;
 
-fn update_camera_data(mut cam_q: Query<(&Camera, &mut Transform, &GlobalTransform)>, mut sdf_data: ResMut<SDFImage>, occ_q: Query<&Occluder>, time: Res<Time>) {
+        x += ((time.elapsed_seconds()*1.5 + i*0.5)* 0.5).cos() * 200.0;
+        y += ((time.elapsed_seconds()*1.75 + i*0.25)* 0.5).sin() * 200.0;
+
+        i+=1.0;
+        transform.translation = Vec3::new(x, y, 0.0);
+    }
+}
+
+fn update_camera_data(
+    mut cam_q: Query<(&Camera, &mut Transform, &GlobalTransform), Without<Sprite>>,
+    sprite_query: Query<(&Transform, &Sprite, &Occluder)>,
+    mut sdf_data: ResMut<SDFImage>, 
+    //occ_q: Query<&Occluder>, 
+    time: Res<Time>) {
     for (cam,mut transform, _global_transform) in &mut cam_q {
 
         let view_matrix = transform.compute_matrix();
@@ -142,9 +164,10 @@ fn update_camera_data(mut cam_q: Query<(&Camera, &mut Transform, &GlobalTransfor
         sdf_data.view_proj = view_proj_matrix;
         let scale = extract_scale_from_matrix(&view_proj_matrix);
 
-        let transformed_occ = occ_q.iter().map(|occ| {
-            let pos = view_proj_matrix * occ.position; // This results in a Vec4
-            let occ_size = occ.data.xy() * scale.xy() * 0.5;
+        let transformed_occ = sprite_query.iter().map(|(transform, sprite, occ)| {
+            let pos = view_proj_matrix * transform.translation.extend(1.0); // This results in a Vec4
+            let occ_size = sprite.custom_size.unwrap().xy() * scale.xy() * 0.5;
+            //let occ_size = occ.data.xy() * scale.xy() * 0.5;
             let data = Vec4::new(occ_size.x, occ_size.y, occ.data.z, occ.data.w);
             Occluder { position: pos, data }
         });
