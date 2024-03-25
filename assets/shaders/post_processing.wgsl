@@ -30,6 +30,7 @@ struct PostProcessSettings {
 #endif
 }
 @group(0) @binding(2) var<uniform> settings: PostProcessSettings;
+@group(0) @binding(3) var sdf_texture: texture_2d<f32>;
 
 @fragment
 fn fragment(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
@@ -37,10 +38,11 @@ fn fragment(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
     let offset_strength = settings.intensity;
 
     // Sample each color channel with an arbitrary shift
+    let sdf_rgb = textureSample(sdf_texture, texture_sampler, in.uv).rgb;
+    let sdf = textureSample(sdf_texture, texture_sampler, in.uv).r;
+    let unlit = textureSample(screen_texture, texture_sampler, in.uv);
     return vec4<f32>(
-        textureSample(screen_texture, texture_sampler, in.uv + vec2<f32>(offset_strength, -offset_strength)).r,
-        textureSample(screen_texture, texture_sampler, in.uv + vec2<f32>(-offset_strength, 0.0)).g,
-        textureSample(screen_texture, texture_sampler, in.uv + vec2<f32>(0.0, offset_strength)).b,
+        sdf_rgb,
         1.0
     );
 }

@@ -1,5 +1,5 @@
 use bevy::{
-    math::vec4, prelude::*, render::{
+    prelude::*, render::{
         //extract_component::ComponentUniforms,
         extract_component::ExtractComponent,
         extract_resource::{ExtractResource, ExtractResourcePlugin},
@@ -14,12 +14,11 @@ use bevy::{
 };
 use std::{
     borrow::Cow,
-    num::{NonZeroU32, NonZeroU64},
 };
 
 const SIZE: (u32, u32) = (1920, 1080);
 const WORKGROUP_SIZE: u32 = 8;
-
+const MAX_OCCLUDERS: usize = 128;
 #[derive(Component, Clone, Copy, Debug, Default)]
 struct SDFVisualizer;
 
@@ -41,28 +40,28 @@ fn setup(mut commands: Commands, mut images: ResMut<Assets<Image>>) {
 
     //commands.spawn(CameraData::default());
 
-    commands.spawn(SpriteBundle {
-        sprite: Sprite {
-            custom_size: Some(Vec2::new(SIZE.0 as f32, SIZE.1 as f32)),
-            ..default()
-        },
-        texture: image.clone(),
-        ..default()
-    }).insert(SDFVisualizer);
+    // commands.spawn(SpriteBundle {
+    //     sprite: Sprite {
+    //         custom_size: Some(Vec2::new(1920 as f32, 1080 as f32)),
+    //         ..default()
+    //     },
+    //     texture: image.clone(),
+    //     ..default()
+    // }).insert(SDFVisualizer);
 
     //commands.spawn(Camera2dBundle::default());
 
-    for i in 0..16 {
+    for i in 0..MAX_OCCLUDERS {
         commands
             .spawn(SpriteBundle {
                 sprite: Sprite {
-                    custom_size: Some(Vec2::new(100.0, 100.0)),
-                    color: Color::srgba(1.0, 0.0, 0.0, 0.25),
+                    custom_size: Some(Vec2::new(64.0, 64.0)),
+                    color: Color::rgba(1.0, 0.0, 0.0, 0.01),
                     ..default()
                 },
                 transform: Transform::from_translation(Vec3::new(
                     (i as f32 * 110.0) - 800.0,
-                    (i as f32 * 20.0),
+                    i as f32 * 20.0,
                     0.0,
                 )),
                 visibility: Visibility::Visible ,
@@ -71,11 +70,11 @@ fn setup(mut commands: Commands, mut images: ResMut<Assets<Image>>) {
             .insert(Occluder {
                 position: Vec4::new(
                     (i as f32 * 110.0) - 800.0,
-                    (i as f32 * 20.0),
+                    i as f32 * 20.0,
                     0.0,
                     0.0,
                 ),
-                data: Vec4::new(100.0, 100.0, 0.0, 0.0),
+                data: Vec4::new(100.0, 100.0, 0.0, 64.0),
             });
     }
 
@@ -86,7 +85,7 @@ fn setup(mut commands: Commands, mut images: ResMut<Assets<Image>>) {
         occluders: [Occluder {
             position: Vec4::ZERO,
             data: Vec4::ZERO,
-        }; 255],
+        }; MAX_OCCLUDERS],
         view_proj: Mat4::IDENTITY,
     });
 }
@@ -139,11 +138,15 @@ fn animate_sprites(time: Res<Time>, mut query: Query<&mut Transform, (With<Sprit
     let mut i = 0.0;
     for mut transform in &mut query.iter_mut() {
         //transform.rotate(Quat::from_rotation_z(time.delta_seconds()));
-        let mut x = ((time.elapsed_seconds() + i)* 0.5).sin() * 300.0;
+        let mut x = ((time.elapsed_seconds() + i)* 0.5).sin() * 500.0;
         let mut y = ((time.elapsed_seconds() + i)* 0.5).cos() * 300.0;
 
         x += ((time.elapsed_seconds()*1.5 + i*0.5)* 0.5).cos() * 200.0;
         y += ((time.elapsed_seconds()*1.75 + i*0.25)* 0.5).sin() * 200.0;
+
+
+        x += ((time.elapsed_seconds()*2.5 + i*1.5)* 0.5).cos() * 100.0;
+        y += ((time.elapsed_seconds()*2.75 + i*1.25)* 0.5).sin() * 100.0;
 
         i+=1.0;
         transform.translation = Vec3::new(x, y, 0.0);
@@ -155,8 +158,8 @@ fn update_camera_data(
     sprite_query: Query<(&Transform, &Sprite, &Occluder)>,
     mut sdf_data: ResMut<SDFImage>, 
     //occ_q: Query<&Occluder>, 
-    time: Res<Time>) {
-    for (cam,mut transform, _global_transform) in &mut cam_q {
+    _time: Res<Time>) {
+    for (cam,transform, _global_transform) in &mut cam_q {
 
         let view_matrix = transform.compute_matrix();
         let proj_matrix = cam.projection_matrix();
@@ -168,7 +171,7 @@ fn update_camera_data(
             let pos = view_proj_matrix * transform.translation.extend(1.0); // This results in a Vec4
             let occ_size = sprite.custom_size.unwrap().xy() * scale.xy() * 0.5;
             //let occ_size = occ.data.xy() * scale.xy() * 0.5;
-            let data = Vec4::new(occ_size.x, occ_size.y, occ.data.z, occ.data.w);
+            let data = Vec4::new(occ_size.x, occ_size.y, occ.data.z, occ.data.w * scale.x * 0.5);
             Occluder { position: pos, data }
         });
 
@@ -196,16 +199,16 @@ unsafe impl bytemuck::Pod for Occluder {}
 unsafe impl bytemuck::Zeroable for Occluder {}
 
 #[derive(Resource, Clone, Deref, ExtractResource, AsBindGroup)]
-struct SDFImage {
+pub struct SDFImage {
     #[deref]
     #[storage_texture(0, image_format = Rgba8Unorm, access = ReadWrite)]
-    texture: Handle<Image>,
+    pub texture: Handle<Image>,
     #[uniform(1)]
     time: f32,
     #[uniform(2)]
     num_occluders: u32,
     #[uniform(3)]
-    occluders: [Occluder; 255],
+    occluders: [Occluder; MAX_OCCLUDERS],
     #[uniform(4)]
     view_proj: Mat4,
     #[cfg(feature = "webgl2")]
@@ -232,7 +235,7 @@ fn prepare_bind_group(
     render_device: Res<RenderDevice>,
     _world: &World,
 ) {
-    let view = gpu_images.get(&sdf_image.texture).unwrap();
+    let view: &bevy::render::texture::GpuImage = gpu_images.get(&sdf_image.texture).unwrap();
 
     // Convert Mat4 matrices and f32 time into byte slices
     let view_proj_matrix_bytes = bytemuck::bytes_of(&sdf_image.view_proj);
@@ -241,7 +244,7 @@ fn prepare_bind_group(
     let num_occluders_bytes = bytemuck::bytes_of(&sdf_image.num_occluders);
     let occluder_slice: &[Occluder] = &sdf_image.occluders;
     let occluder_bytes: &[u8] = bytemuck::cast_slice(occluder_slice);
-    let buffer_size = std::mem::size_of::<Occluder>() * 255;
+    //let _buffer_size = std::mem::size_of::<Occluder>() * MAX_OCCLUDERS;
 
     let time_buffer = render_device.create_buffer_with_data(&BufferInitDescriptor {
         label: Some("time buffer"),

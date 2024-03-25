@@ -43,12 +43,12 @@ fn sdf_world(p: vec2<f32>) -> f32
         }
         else if (occ_type == 1.0)
         {
-            d = min(d, sdf_round_rect(occ_p, occ_size, occ_r));
+            d = min(d, sdf_circle(occ_p, occ_r));
         }
         else if (occ_type == 2.0)
         {
-            d = min(d, sdf_circle(occ_p, occ_r));
-        }
+            d = min(d, sdf_round_rect(occ_p, occ_size, occ_r));
+        }        
     }
     //var d = sdf_circle(p, 0.5);
     return d;
@@ -79,7 +79,7 @@ fn main(@builtin(global_invocation_id) invocation_id: vec3<u32>) {
     var uv = (vec2<f32>(f32(invocation_id.x), f32(invocation_id.y)) / textureSizeF32 - vec2<f32>(0.5, 0.5)) * 2.0;
     uv.y = -uv.y; // Flip Y-axis to match texture coordinates
 
-    //uv.y*=aspect;
+    //uv.x/=aspect;
     // var uv = (vec2<f32>(f32(invocation_id.x), f32(invocation_id.y) ) / textureSizeF32 - vec2<f32>(0.5, 0.5)) * vec2<f32>(-aspect, 1.0); ;
 
     let ts = sin(time) * 0.1;
@@ -94,7 +94,7 @@ fn main(@builtin(global_invocation_id) invocation_id: vec3<u32>) {
     let d = sdf_world(uv);
 
     var col: vec4<f32>;
-    col = select(vec4<f32>(0.95,0.4,0.06, 1.0), vec4<f32>(0.15,0.35,1.0, 0.9), d>0.0);
+    col = select(vec4<f32>(0.99,0.6,0.06, 1.0), vec4<f32>(0.15,0.35,1.0, 0.9), d>0.0);
 
 	col *= 1.0 - exp(-6.0*abs(d));
 	col *= 0.8 + 0.2*cos(512.0*abs(d));

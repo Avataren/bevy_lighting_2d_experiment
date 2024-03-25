@@ -17,19 +17,16 @@ use bevy::{
     render::{
         extract_component::{
             ComponentUniforms, ExtractComponent, ExtractComponentPlugin, UniformComponentPlugin,
-        },
-        render_graph::{
+        }, render_asset::RenderAssets, render_graph::{
             NodeRunError, RenderGraphApp, RenderGraphContext, RenderLabel, ViewNode, ViewNodeRunner,
-        },
-        render_resource::{
+        }, render_resource::{
             binding_types::{sampler, texture_2d, uniform_buffer},
             *,
-        },
-        renderer::{RenderContext, RenderDevice},
-        view::ViewTarget,
-        RenderApp,
+        }, renderer::{RenderContext, RenderDevice}, view::ViewTarget, RenderApp
     },
 };
+
+use super::light2d_plugin::SDFImage;
 
 /// It is generally encouraged to set up post processing effects as a plugin
 pub struct PostProcessPlugin;
@@ -172,6 +169,12 @@ impl ViewNode for PostProcessNode {
         // The reason it doesn't work is because each post_process_write will alternate the source/destination.
         // The only way to have the correct source/destination for the bind_group
         // is to make sure you get it during the node execution.
+
+        //gpu_images: Res<RenderAssets<Image>>,
+        //sdf_image: Res<SDFImage>,
+        let sdf_image = world.resource::<SDFImage>();
+        let gpu_images = world.resource::<RenderAssets<Image>>();
+        let sdf_view = gpu_images.get(&sdf_image.texture).unwrap();
         let bind_group = render_context.render_device().create_bind_group(
             "post_process_bind_group",
             &post_process_pipeline.layout,
@@ -183,6 +186,7 @@ impl ViewNode for PostProcessNode {
                 &post_process_pipeline.sampler,
                 // Set the settings binding
                 settings_binding.clone(),
+                BindingResource::TextureView(&sdf_view.texture_view),
             )),
         );
 
@@ -236,6 +240,7 @@ impl FromWorld for PostProcessPipeline {
                     sampler(SamplerBindingType::Filtering),
                     // The settings uniform that will control the effect
                     uniform_buffer::<PostProcessSettings>(false),
+                    texture_2d(TextureSampleType::Float { filterable: true })
                 ),
             ),
         );
@@ -296,8 +301,8 @@ struct PostProcessSettings {
 /// Set up a simple 2D scene
 fn setup(
     mut commands: Commands,
-    mut meshes: ResMut<Assets<Mesh>>,
-    mut materials: ResMut<Assets<StandardMaterial>>,
+    _meshes: ResMut<Assets<Mesh>>,
+    _materials: ResMut<Assets<StandardMaterial>>,
 ) {
     // camera
     commands.spawn((
