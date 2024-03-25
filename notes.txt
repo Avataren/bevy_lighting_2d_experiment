@@ -1,0 +1,2 @@
+cargo build --target wasm32-unknown-unknown --release
+wasm-bindgen --out-name="light2d" --out-dir="web/wasm/target" --target="web" .\target\wasm32-unknown-unknown\release\lighting.wasm

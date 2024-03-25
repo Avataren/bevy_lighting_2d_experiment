@@ -3,10 +3,10 @@ struct Occluder {
     data: vec4<f32>,
 };
 
-@group(0) @binding(0) var texture: texture_storage_2d<r16float, read_write>;
+@group(0) @binding(0) var texture: texture_storage_2d<r32float, write>;
 @group(0) @binding(1) var<uniform> time: f32;
 @group(0) @binding(2) var<uniform> num_occ: u32;
-@group(0) @binding(3) var<uniform> occluders: array<Occluder, 255>;
+@group(0) @binding(3) var<uniform> occluders: array<Occluder, 16>;
 @group(0) @binding(4) var<uniform> view_proj_matrix: mat4x4<f32>;
 
 fn sdf_circle(p: vec2<f32>, r: f32) -> f32

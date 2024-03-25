@@ -12,7 +12,7 @@ use bevy::{
         RenderSet,
     }
 };
-use std::borrow::Cow;
+use std::{borrow::Cow, num::NonZeroU64};
 
 const SIZE: (u32, u32) = (1920, 1080);
 const WORKGROUP_SIZE: u32 = 8;
@@ -29,7 +29,7 @@ fn setup(mut commands: Commands, mut images: ResMut<Assets<Image>>, asset_server
         },
         TextureDimension::D2,
         &[0, 0, 0, 255],
-        TextureFormat::R16Float,
+        TextureFormat::R32Float,
         RenderAssetUsages::RENDER_WORLD,
     );
     image.texture_descriptor.usage =
@@ -199,7 +199,7 @@ unsafe impl bytemuck::Zeroable for Occluder {}
 #[derive(Resource, Clone, Deref, ExtractResource, AsBindGroup)]
 pub struct SDFImage {
     #[deref]
-    #[storage_texture(0, image_format = R16Float, access = ReadWrite)]
+    #[storage_texture(0, image_format = R32Float, access = WriteOnly)]
     pub texture: Handle<Image>,
     #[uniform(1)]
     time: f32,
@@ -242,6 +242,7 @@ fn prepare_bind_group(
     let num_occluders_bytes = bytemuck::bytes_of(&sdf_image.num_occluders);
     let occluder_slice: &[Occluder] = &sdf_image.occluders;
     let occluder_bytes: &[u8] = bytemuck::cast_slice(occluder_slice);
+    //let occluders_size = std::mem::size_of::<Occluder>() * sdf_image.occluders.len();
     //let _buffer_size = std::mem::size_of::<Occluder>() * MAX_OCCLUDERS;
 
     let time_buffer = render_device.create_buffer_with_data(&BufferInitDescriptor {
@@ -301,7 +302,7 @@ fn prepare_bind_group(
                     // Buffer binding for the time value
                     buffer: &occluder_buffer,
                     offset: 0,
-                    size: None,
+                    size: None,//NonZeroU64::new(occluders_size as u64)
                 }),
             },
             BindGroupEntry {
