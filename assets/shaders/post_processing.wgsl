@@ -35,17 +35,16 @@ fn raymarch_light(light_pos: vec2<f32>, pixel_pos: vec2<f32>, max_steps: i32, ma
         let next_total_distance = total_distance + length(next_p - p);
 
         // Use a uniform condition to decide whether to update
-        let should_update = (next_total_distance <= max_distance) && (length(next_p - light_pos) >= light_radius);
-        if (total_distance > max_ray_len) {
-            break; // Stop if the ray exceeds the max distance
-        }
+        let should_update = (next_total_distance <= max_distance) && (length(next_p - light_pos) >= light_radius)
+        &&  (next_total_distance < max_ray_len);
         // Conditionally update ray marching variables based on the uniform condition
         if (should_update) {
             p = next_p;
             total_distance = next_total_distance;
 
-            if (sdf_sample < 0.0025) {
-                let obstruction = 1.0 - sdf_sample * 16.0 / light_radius;
+            //if (sdf_sample < 0.0025)
+            {
+                let obstruction = clamp(1.0 - sdf_sample * 1.0 / light_radius, 0.0, 1.0);
                 //let obstruction = clamp(1.0 - sdf_sample * 48.0 / light_radius, 0.0, 1.0); 
                 max_obstruction = max(max_obstruction, obstruction);
             }
@@ -123,7 +122,7 @@ fn fragment(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
         // The fragment is outside, compute lighting normally
     let multiplier = select (0.0,1.0, sdf_value > 0.0);
     for (var i = 0; i < 4; i = i + 1) {
-        let light_contribution = raymarch_light(lights[i].position, in.uv, 16, 32.0, 0.025);
+        let light_contribution = raymarch_light(lights[i].position, in.uv, 16, 32.0, 0.005);
         color += lights[i].color * light_contribution * multiplier;
     }
     // }
