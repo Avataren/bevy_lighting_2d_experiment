@@ -20,7 +20,7 @@ const MAX_OCCLUDERS: usize = 16;
 #[derive(Component, Clone, Copy, Debug, Default)]
 struct SDFVisualizer;
 
-fn setup(mut commands: Commands, mut images: ResMut<Assets<Image>>, mut asset_server: ResMut<AssetServer>) {
+fn setup(mut commands: Commands, mut images: ResMut<Assets<Image>>, asset_server: ResMut<AssetServer>) {
     let mut image = Image::new_fill(
         Extent3d {
             width: SIZE.0,
