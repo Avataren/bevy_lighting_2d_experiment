@@ -16,7 +16,7 @@ use std::borrow::Cow;
 
 const SIZE: (u32, u32) = (1920, 1080);
 const WORKGROUP_SIZE: u32 = 8;
-const MAX_OCCLUDERS: usize = 32;
+const MAX_OCCLUDERS: usize = 16;
 #[derive(Component, Clone, Copy, Debug, Default)]
 struct SDFVisualizer;
 

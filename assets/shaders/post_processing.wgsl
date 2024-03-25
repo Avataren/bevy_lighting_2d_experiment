@@ -45,7 +45,7 @@ fn raymarch_light(light_pos: vec2<f32>, pixel_pos: vec2<f32>, max_steps: i32, ma
     var p = pixel_pos;
     var total_distance = 0.0;
     var max_obstruction = 0.0; // Tracks the maximum obstruction value
-    let constant_attenuation = 4.0; // You can adjust this constant
+    let constant_attenuation = 8.0; // You can adjust this constant
     let linear_attenuation = 20.0; // Adjust linear attenuation factor
     let quadratic_attenuation = 2500.0; // Adjust quadratic attenuation factor
 
