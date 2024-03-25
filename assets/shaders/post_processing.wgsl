@@ -44,7 +44,7 @@ fn raymarch_light(light_pos: vec2<f32>, pixel_pos: vec2<f32>, max_steps: i32, ma
 
             //if (sdf_sample < 0.0025)
             {
-                let obstruction = clamp(1.0 - sdf_sample * 1.0 / light_radius, 0.0, 1.0);
+                let obstruction = clamp(1.0 - sdf_sample * 2.0 / light_radius, 0.0, 1.0);
                 //let obstruction = clamp(1.0 - sdf_sample * 48.0 / light_radius, 0.0, 1.0); 
                 max_obstruction = max(max_obstruction, obstruction);
             }
@@ -56,46 +56,6 @@ fn raymarch_light(light_pos: vec2<f32>, pixel_pos: vec2<f32>, max_steps: i32, ma
     return max(0.0, (1.0 - max_obstruction) * attenuation);
 }
 
-
-
-
-// fn raymarch_light(light_pos: vec2<f32>, pixel_pos: vec2<f32>, max_steps: i32, max_distance: f32, light_radius: f32) -> f32 {
-//     let light_dir = normalize(light_pos - pixel_pos);
-//     var p = pixel_pos;
-//     var total_distance = 0.0;
-//     var max_obstruction = 0.0; // Tracks the maximum obstruction value
-//     let constant_attenuation = 8.0; // You can adjust this constant
-//     let linear_attenuation = 20.0; // Adjust linear attenuation factor
-//     let quadratic_attenuation = 2500.0; // Adjust quadratic attenuation factor
-    
-//     for (var i = 0; i < max_steps; i = i + 1) {
-//         let sdf = textureSample(sdf_texture, texture_sampler, p).r * 0.05; // Sample the SDF at the current point
-//         // Check for an occluder
-//         if (sdf < 0.01) { // Adjust the threshold based on your SDF
-//             let obstruction = 1.0 - sdf*48.0 / light_radius; // Calculate the obstruction based on SDF and light radius
-//             max_obstruction = max(max_obstruction, obstruction); // Keep the maximum obstruction value
-//         }
-
-//         // Advance the ray
-//         p += light_dir * max(sdf, 0.0005); // Use a small minimum step to avoid getting stuck in zero SDF regions
-//         total_distance += length(p - pixel_pos);
-
-//         if (total_distance > max_distance) {
-//             break; // Stop if the ray exceeds the max distance
-//         }
-//         // Break if we've reached close to the light source
-//         if (length(p - light_pos) < light_radius) {
-//             break;
-//         }
-//     }
-
-//     // Calculate the attenuation based on the distance to the light source
-//     let d = length(light_pos - pixel_pos);
-//     let attenuation = constant_attenuation / (1.0 + linear_attenuation * d + quadratic_attenuation * d * d);
-
-//     // Apply attenuation to the light intensity reduced by the maximum obstruction
-//     return max(0.0, (1.0 - max_obstruction) * attenuation);
-// }
 
 @fragment
 fn fragment(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
@@ -122,7 +82,7 @@ fn fragment(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
         // The fragment is outside, compute lighting normally
     let multiplier = select (0.0,1.0, sdf_value > 0.0);
     for (var i = 0; i < 4; i = i + 1) {
-        let light_contribution = raymarch_light(lights[i].position, in.uv, 16, 32.0, 0.005);
+        let light_contribution = raymarch_light(lights[i].position, in.uv, 16, 32.0, 0.0125);
         color += lights[i].color * light_contribution * multiplier;
     }
     // }

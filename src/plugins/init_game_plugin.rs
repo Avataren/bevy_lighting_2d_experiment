@@ -1,5 +1,5 @@
 use bevy::prelude::*;
-use iyes_perf_ui::prelude::*;
+
 pub struct InitGamePlugin;
 
 impl Plugin for InitGamePlugin {
@@ -14,6 +14,6 @@ impl Plugin for InitGamePlugin {
     }
 }
 
-fn setup(mut commands: Commands) {
+fn setup(_commands: Commands) {
     //commands.spawn(PerfUiCompleteBundle::default());
 }

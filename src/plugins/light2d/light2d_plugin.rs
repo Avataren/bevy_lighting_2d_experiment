@@ -12,7 +12,7 @@ use bevy::{
         RenderSet,
     }
 };
-use std::{borrow::Cow, num::NonZeroU64};
+use std::{borrow::Cow};
 
 const SIZE: (u32, u32) = (1920, 1080);
 const WORKGROUP_SIZE: u32 = 8;
