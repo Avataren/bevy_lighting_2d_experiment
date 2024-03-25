@@ -12,17 +12,15 @@ use bevy::{
         RenderSet,
     }
 };
-use std::{
-    borrow::Cow,
-};
+use std::borrow::Cow;
 
 const SIZE: (u32, u32) = (1920, 1080);
 const WORKGROUP_SIZE: u32 = 8;
-const MAX_OCCLUDERS: usize = 128;
+const MAX_OCCLUDERS: usize = 32;
 #[derive(Component, Clone, Copy, Debug, Default)]
 struct SDFVisualizer;
 
-fn setup(mut commands: Commands, mut images: ResMut<Assets<Image>>) {
+fn setup(mut commands: Commands, mut images: ResMut<Assets<Image>>, mut asset_server: ResMut<AssetServer>) {
     let mut image = Image::new_fill(
         Extent3d {
             width: SIZE.0,
@@ -31,7 +29,7 @@ fn setup(mut commands: Commands, mut images: ResMut<Assets<Image>>) {
         },
         TextureDimension::D2,
         &[0, 0, 0, 255],
-        TextureFormat::Rgba8Unorm,
+        TextureFormat::R16Float,
         RenderAssetUsages::RENDER_WORLD,
     );
     image.texture_descriptor.usage =
@@ -40,14 +38,14 @@ fn setup(mut commands: Commands, mut images: ResMut<Assets<Image>>) {
 
     //commands.spawn(CameraData::default());
 
-    // commands.spawn(SpriteBundle {
-    //     sprite: Sprite {
-    //         custom_size: Some(Vec2::new(1920 as f32, 1080 as f32)),
-    //         ..default()
-    //     },
-    //     texture: image.clone(),
-    //     ..default()
-    // }).insert(SDFVisualizer);
+    commands.spawn(SpriteBundle {
+        sprite: Sprite {
+            custom_size: Some(Vec2::new(1920 as f32, 1080 as f32)),
+            ..default()
+        },
+        texture: asset_server.load("floor.png"),
+        ..default()
+    }).insert(SDFVisualizer);
 
     //commands.spawn(Camera2dBundle::default());
 
@@ -55,8 +53,8 @@ fn setup(mut commands: Commands, mut images: ResMut<Assets<Image>>) {
         commands
             .spawn(SpriteBundle {
                 sprite: Sprite {
-                    custom_size: Some(Vec2::new(64.0, 64.0)),
-                    color: Color::rgba(1.0, 0.0, 0.0, 0.01),
+                    custom_size: Some(Vec2::new(50.0, 50.0)),
+                    color: Color::rgba(0.25, 0.25, 0.25, 1.0),
                     ..default()
                 },
                 transform: Transform::from_translation(Vec3::new(
@@ -138,14 +136,14 @@ fn animate_sprites(time: Res<Time>, mut query: Query<&mut Transform, (With<Sprit
     let mut i = 0.0;
     for mut transform in &mut query.iter_mut() {
         //transform.rotate(Quat::from_rotation_z(time.delta_seconds()));
-        let mut x = ((time.elapsed_seconds() + i)* 0.5).sin() * 500.0;
+        let mut x = ((time.elapsed_seconds() + i)* 0.5).sin() * 400.0;
         let mut y = ((time.elapsed_seconds() + i)* 0.5).cos() * 300.0;
 
-        x += ((time.elapsed_seconds()*1.5 + i*0.5)* 0.5).cos() * 200.0;
+        x += ((time.elapsed_seconds()*1.5 + i*0.5)* 0.5).cos() * 3.0;
         y += ((time.elapsed_seconds()*1.75 + i*0.25)* 0.5).sin() * 200.0;
 
 
-        x += ((time.elapsed_seconds()*2.5 + i*1.5)* 0.5).cos() * 100.0;
+        x += ((time.elapsed_seconds()*2.5 + i*1.5)* 0.5).cos() * 200.0;
         y += ((time.elapsed_seconds()*2.75 + i*1.25)* 0.5).sin() * 100.0;
 
         i+=1.0;
@@ -201,7 +199,7 @@ unsafe impl bytemuck::Zeroable for Occluder {}
 #[derive(Resource, Clone, Deref, ExtractResource, AsBindGroup)]
 pub struct SDFImage {
     #[deref]
-    #[storage_texture(0, image_format = Rgba8Unorm, access = ReadWrite)]
+    #[storage_texture(0, image_format = R16Float, access = ReadWrite)]
     pub texture: Handle<Image>,
     #[uniform(1)]
     time: f32,

@@ -319,8 +319,8 @@ fn setup(
         },
         BloomSettings {
             intensity: 0.5,
-            low_frequency_boost: 0.15,
-            high_pass_frequency: 0.8,
+            //low_frequency_boost: 0.15,
+            //high_pass_frequency: 0.8,
             ..Default::default()
         },
         // Add the setting to the camera.

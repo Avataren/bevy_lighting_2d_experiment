@@ -3,7 +3,7 @@ struct Occluder {
     data: vec4<f32>,
 };
 
-@group(0) @binding(0) var texture: texture_storage_2d<rgba8unorm, read_write>;
+@group(0) @binding(0) var texture: texture_storage_2d<r16float, read_write>;
 @group(0) @binding(1) var<uniform> time: f32;
 @group(0) @binding(2) var<uniform> num_occ: u32;
 @group(0) @binding(3) var<uniform> occluders: array<Occluder, 255>;
@@ -82,8 +82,8 @@ fn main(@builtin(global_invocation_id) invocation_id: vec3<u32>) {
     //uv.x/=aspect;
     // var uv = (vec2<f32>(f32(invocation_id.x), f32(invocation_id.y) ) / textureSizeF32 - vec2<f32>(0.5, 0.5)) * vec2<f32>(-aspect, 1.0); ;
 
-    let ts = sin(time) * 0.1;
-    let tc = cos(time) * 0.3;
+    //let ts = sin(time) * 0.1;
+    //let tc = cos(time) * 0.3;
 
     // let center = vec2<f32>(0.0, 0.0);
     // var d = sdf_rect(uv - center, vec2<f32>(0.35 - ts+tc, 0.15+ts-tc*0.25));
@@ -93,14 +93,12 @@ fn main(@builtin(global_invocation_id) invocation_id: vec3<u32>) {
    
     let d = sdf_world(uv);
 
-    var col: vec4<f32>;
-    col = select(vec4<f32>(0.99,0.6,0.06, 1.0), vec4<f32>(0.15,0.35,1.0, 0.9), d>0.0);
+    // var col: vec4<f32>;
+    // col = select(vec4<f32>(0.99,0.6,0.06, 1.0), vec4<f32>(0.15,0.35,1.0, 0.9), d>0.0);
 
-	col *= 1.0 - exp(-6.0*abs(d));
-	col *= 0.8 + 0.2*cos(512.0*abs(d));
-	col = mix( col, vec4<f32>(1.0), 1.0-smoothstep(0.0,0.0015,abs(d)) );
-    col.a = 1.0;
-    textureStore(texture, vec2<i32>(invocation_id.xy), col);
-
-
+	// col *= 1.0 - exp(-6.0*abs(d));
+	// col *= 0.8 + 0.2*cos(512.0*abs(d));
+	// col = mix( col, vec4<f32>(1.0), 1.0-smoothstep(0.0,0.0015,abs(d)) );
+    // col.a = 1.0;
+    textureStore(texture, vec2<i32>(invocation_id.xy), vec4<f32>(d,0,0,0));
 }
