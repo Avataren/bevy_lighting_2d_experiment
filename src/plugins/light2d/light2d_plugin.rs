@@ -192,7 +192,7 @@ fn animate_sprites(
         y += ((time.elapsed_seconds() * 2.75 + i * 1.25) * 0.5).sin() * 100.0;
 
         i += 1.0;
-        transform.translation = Vec3::new(x, y, 0.0);
+        transform.translation = Vec3::new(x, y, i * 0.1 + 0.1);
     }
 }
 

@@ -28,6 +28,8 @@ fn raymarch_light(light_pos: vec2<f32>, pixel_pos: vec2<f32>, max_steps: i32, li
     var total_distance = 0.0;
     var max_obstruction = 0.0;
 
+    var is_neg = textureSample(sdf_texture, texture_sampler, p).r < 0.0;
+
     for (var i = 0; i < max_steps; i = i + 1) {
         let sdf_sample = textureSample(sdf_texture, texture_sampler, p).r * 0.25;
 
@@ -39,7 +41,7 @@ fn raymarch_light(light_pos: vec2<f32>, pixel_pos: vec2<f32>, max_steps: i32, li
             p = next_p;
             total_distance = next_total_distance;
 
-            let obstruction = (1.0 - (sdf_sample+0.002) * 8.0 / light_radius);
+            let obstruction = (1.0 - (sdf_sample+0.002) * 6.0 / light_radius);
             max_obstruction = max(max_obstruction, obstruction);
         }
     }
@@ -50,7 +52,7 @@ fn raymarch_light(light_pos: vec2<f32>, pixel_pos: vec2<f32>, max_steps: i32, li
     let d = length(adjusted_light_pos - adjusted_pixel_pos);
     let attenuation = 32.0 / (1.0 + 20.0 * d + 2500.0 * d * d);
 
-    return max(0.0, (1.0 - max_obstruction) * attenuation);
+    return select(max(0.0, (1.0 - max_obstruction) * attenuation), 0.5, is_neg);
 }
 
 
@@ -67,17 +69,17 @@ fn fragment(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
     let offset_strength = settings.intensity;
     let unlit = textureSample(screen_texture, texture_sampler, in.uv);
     // let spos = in.uv - vec2<f32>(0.5, 0.5) * 2.0;
-    let sdf_value = textureSample(sdf_texture, texture_sampler, in.uv).r;
-    let ambient = 0.01;
+    //let sdf_value = textureSample(sdf_texture, texture_sampler, in.uv).r;
+    let ambient = 0.02;
     let aspect = f32(1920.0) / f32(1080.0);
     var color = vec3<f32>(0.0, 0.0, 0.0);
 
-    let base_col = select(0.0, 0.5, sdf_value < 0.0);//     // The fragment is inside an object, consider it fully lit
-    color = vec3<f32>(base_col, base_col, base_col); // Add full light color for each light
-    let multiplier = select(0.0, 1.0, sdf_value > 0.0);
+    //let base_col = select(0.0, 0.5, sdf_value < 0.0);//     // The fragment is inside an object, consider it fully lit
+    //color = vec3<f32>(base_col, base_col, base_col); // Add full light color for each light
+    //let multiplier = select(0.0, 1.0, sdf_value > 0.0);
     for (var i = 0; i < 4; i = i + 1) {
         let light_contribution = raymarch_light(lights[i].position, in.uv, 32, 0.025, aspect);
-        color += lights[i].color * light_contribution * multiplier;
+        color += lights[i].color * light_contribution;// * multiplier;
     }
     return vec4<f32>(
         unlit.r * (color.r + ambient),
