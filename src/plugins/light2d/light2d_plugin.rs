@@ -1,5 +1,7 @@
 use bevy::{
-    prelude::*, render::{
+    asset::load_internal_asset,
+    prelude::*,
+    render::{
         //extract_component::ComponentUniforms,
         extract_component::ExtractComponent,
         extract_resource::{ExtractResource, ExtractResourcePlugin},
@@ -10,17 +12,24 @@ use bevy::{
         Render,
         RenderApp,
         RenderSet,
-    }
+    }, sprite::{MaterialMesh2dBundle, Mesh2d, Mesh2dHandle},
 };
-use std::{borrow::Cow};
+use std::borrow::Cow;
 
 const SIZE: (u32, u32) = (1920, 1080);
 const WORKGROUP_SIZE: u32 = 8;
-const MAX_OCCLUDERS: usize = 16;
+const MAX_OCCLUDERS: usize = 256;
+const TEST_OCCLUDERS: usize = 16;
 #[derive(Component, Clone, Copy, Debug, Default)]
 struct SDFVisualizer;
 
-fn setup(mut commands: Commands, mut images: ResMut<Assets<Image>>, asset_server: ResMut<AssetServer>) {
+fn setup(
+    mut commands: Commands,
+    mut images: ResMut<Assets<Image>>,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut materials: ResMut<Assets<ColorMaterial>>,
+    asset_server: ResMut<AssetServer>,
+) {
     let mut image = Image::new_fill(
         Extent3d {
             width: SIZE.0,
@@ -38,41 +47,63 @@ fn setup(mut commands: Commands, mut images: ResMut<Assets<Image>>, asset_server
 
     //commands.spawn(CameraData::default());
 
-    commands.spawn(SpriteBundle {
-        sprite: Sprite {
-            custom_size: Some(Vec2::new(1920 as f32, 1080 as f32)),
+    commands
+        .spawn(SpriteBundle {
+            sprite: Sprite {
+                custom_size: Some(Vec2::new(1920 as f32, 1080 as f32)),
+                ..default()
+            },
+            //texture: image.clone(),
+            texture: asset_server.load("floor.png"),
             ..default()
-        },
-        texture: asset_server.load("floor.png"),
-        ..default()
-    }).insert(SDFVisualizer);
+        })
+        .insert(SDFVisualizer);
 
     //commands.spawn(Camera2dBundle::default());
 
-    for i in 0..MAX_OCCLUDERS {
+    // for i in 0..TEST_OCCLUDERS {
+    //     commands
+    //         .spawn(SpriteBundle {
+    //             sprite: Sprite {
+    //                 custom_size: Some(Vec2::new(50.0, 50.0)),
+    //                 color: Color::rgba(0.25, 0.25, 0.25, 1.0),
+    //                 ..default()
+    //             },
+    //             transform: Transform::from_translation(Vec3::new(
+    //                 (i as f32 * 110.0) - 800.0,
+    //                 i as f32 * 20.0,
+    //                 0.0,
+    //             )),
+    //             visibility: Visibility::Visible,
+    //             ..default()
+    //         })
+    //         .insert(Occluder {
+    //             position: Vec4::new((i as f32 * 110.0) - 800.0, i as f32 * 20.0, 0.0, 0.0),
+    //             data: Vec4::new(100.0, 100.0, (i%2) as f32, 50.0),
+    //         });
+    // }
+
+    let shapes = [
+        Mesh2dHandle(meshes.add(Rectangle::new(50.0, 50.0))),
+        Mesh2dHandle(meshes.add(Circle { radius: 25.0 })),
+    ];
+
+    for i in 0..TEST_OCCLUDERS {
+        let color = Color::hsl(360. * i as f32 / TEST_OCCLUDERS as f32, 0.95, 0.7);
         commands
-            .spawn(SpriteBundle {
-                sprite: Sprite {
-                    custom_size: Some(Vec2::new(50.0, 50.0)),
-                    color: Color::rgba(0.25, 0.25, 0.25, 1.0),
-                    ..default()
-                },
-                transform: Transform::from_translation(Vec3::new(
-                    (i as f32 * 110.0) - 800.0,
-                    i as f32 * 20.0,
+            .spawn(MaterialMesh2dBundle {
+                mesh: shapes[i % 2].clone(),
+                material: materials.add(color),
+                transform: Transform::from_xyz(
+                    (i as f32) *50.0,
                     0.0,
-                )),
-                visibility: Visibility::Visible ,
+                    (i as f32) / TEST_OCCLUDERS as f32+0.1,
+                ),
                 ..default()
             })
             .insert(Occluder {
-                position: Vec4::new(
-                    (i as f32 * 110.0) - 800.0,
-                    i as f32 * 20.0,
-                    0.0,
-                    0.0,
-                ),
-                data: Vec4::new(100.0, 100.0, 0.0, 64.0),
+                position: Vec4::new(0.0, 0.0, 0.0, 0.0),
+                data: Vec4::new(50.0, 50.0, (i % 2) as f32, 25.0 * 1.5),
             });
     }
 
@@ -84,7 +115,7 @@ fn setup(mut commands: Commands, mut images: ResMut<Assets<Image>>, asset_server
             position: Vec4::ZERO,
             data: Vec4::ZERO,
         }; MAX_OCCLUDERS],
-        view_proj: Mat4::IDENTITY,
+        proj_matrix: Mat4::IDENTITY,
     });
 }
 
@@ -97,6 +128,9 @@ pub struct SDFComputePlugin;
 #[derive(Debug, Hash, PartialEq, Eq, Clone, RenderLabel)]
 struct SDFNodeLabel;
 
+pub const SHADER_GI_CAMERA: Handle<Shader> =
+    Handle::weak_from_u128(21570939207719200017800448956450489004);
+
 impl Plugin for SDFComputePlugin {
     fn build(&self, app: &mut App) {
         // Extract the resources from the main world into the render world
@@ -108,6 +142,14 @@ impl Plugin for SDFComputePlugin {
             // ))
             .add_systems(Startup, setup)
             .add_systems(Update, (update_camera_data, update_time, animate_sprites));
+
+        load_internal_asset!(
+            app,
+            SHADER_GI_CAMERA,
+            "../../../assets/shaders/sdf_util.wgsl",
+            Shader::from_wgsl
+        );
+
         let render_app = app.sub_app_mut(RenderApp);
         render_app.add_systems(
             Render,
@@ -132,45 +174,57 @@ fn extract_scale_from_matrix(matrix: &Mat4) -> Vec3 {
     Vec3::new(scale_x, scale_y, scale_z)
 }
 
-fn animate_sprites(time: Res<Time>, mut query: Query<&mut Transform, (With<Sprite>, Without<SDFVisualizer>)>) {
+fn animate_sprites(
+    time: Res<Time>,
+    //mut query: Query<&mut Transform, (With<Sprite>, Without<SDFVisualizer>)>,
+    mut query: Query<&mut Transform, With<Occluder>>,
+) {
     let mut i = 0.0;
     for mut transform in &mut query.iter_mut() {
         //transform.rotate(Quat::from_rotation_z(time.delta_seconds()));
-        let mut x = ((time.elapsed_seconds() + i)* 0.5).sin() * 400.0;
-        let mut y = ((time.elapsed_seconds() + i)* 0.5).cos() * 300.0;
+        let mut x = ((time.elapsed_seconds() + i) * 0.5).sin() * 400.0;
+        let mut y = ((time.elapsed_seconds() + i) * 0.5).cos() * 300.0;
 
-        x += ((time.elapsed_seconds()*1.5 + i*0.5)* 0.5).cos() * 3.0;
-        y += ((time.elapsed_seconds()*1.75 + i*0.25)* 0.5).sin() * 200.0;
+        x += ((time.elapsed_seconds() * 1.5 + i * 0.5) * 0.5).cos() * 3.0;
+        y += ((time.elapsed_seconds() * 1.75 + i * 0.25) * 0.5).sin() * 200.0;
 
+        x += ((time.elapsed_seconds() * 2.5 + i * 1.5) * 0.5).cos() * 200.0;
+        y += ((time.elapsed_seconds() * 2.75 + i * 1.25) * 0.5).sin() * 100.0;
 
-        x += ((time.elapsed_seconds()*2.5 + i*1.5)* 0.5).cos() * 200.0;
-        y += ((time.elapsed_seconds()*2.75 + i*1.25)* 0.5).sin() * 100.0;
-
-        i+=1.0;
+        i += 1.0;
         transform.translation = Vec3::new(x, y, 0.0);
     }
 }
 
 fn update_camera_data(
-    mut cam_q: Query<(&Camera, &mut Transform, &GlobalTransform), Without<Sprite>>,
-    sprite_query: Query<(&Transform, &Sprite, &Occluder)>,
-    mut sdf_data: ResMut<SDFImage>, 
-    //occ_q: Query<&Occluder>, 
-    _time: Res<Time>) {
-    for (cam,transform, _global_transform) in &mut cam_q {
-
+    mut cam_q: Query<(&Camera, &mut Transform), Without<Occluder>>,
+    sprite_query:  Query<(&mut Transform, &Occluder)>,
+    mut sdf_data: ResMut<SDFImage>,
+    //occ_q: Query<&Occluder>,
+    _time: Res<Time>,
+) {
+    let aspect = f32::abs(SIZE.0 as f32 / SIZE.1 as f32);
+    for (cam, transform) in &mut cam_q {
         let view_matrix = transform.compute_matrix();
         let proj_matrix = cam.projection_matrix();
         let view_proj_matrix = proj_matrix * view_matrix.inverse();
-        sdf_data.view_proj = view_proj_matrix;
-        let scale = extract_scale_from_matrix(&view_proj_matrix);
-
-        let transformed_occ = sprite_query.iter().map(|(transform, sprite, occ)| {
-            let pos = view_proj_matrix * transform.translation.extend(1.0); // This results in a Vec4
-            let occ_size = sprite.custom_size.unwrap().xy() * scale.xy() * 0.5;
-            //let occ_size = occ.data.xy() * scale.xy() * 0.5;
-            let data = Vec4::new(occ_size.x, occ_size.y, occ.data.z, occ.data.w * scale.x * 0.5);
-            Occluder { position: pos, data }
+        sdf_data.proj_matrix = view_proj_matrix;
+        let scale = extract_scale_from_matrix(&view_proj_matrix) * 0.5;
+        let scale_geom_mean = f32::sqrt(scale.x * scale.y);
+        //println!("Scale: {:?}", scale);
+        let transformed_occ = sprite_query.iter().map(|(transform, occ)| {
+            let pos = view_proj_matrix * transform.translation.extend(1.0);
+            let occ_size = occ.data.xy() * scale.xy();
+            let data = Vec4::new(
+                occ_size.x,
+                occ_size.y,
+                occ.data.z,
+                occ.data.w * scale_geom_mean,
+            );
+            Occluder {
+                position: pos,
+                data,
+            }
         });
 
         sdf_data.num_occluders = transformed_occ.len() as u32;
@@ -178,15 +232,9 @@ fn update_camera_data(
         transformed_occ.enumerate().for_each(|(i, occ)| {
             sdf_data.occluders[i] = occ;
         });
-        
     }
 }
 
-//#[derive(Component, Clone, Copy, ExtractComponent, ShaderType)]
-// struct CameraData {
-//     view_matrix: Mat4,
-//     proj_matrix: Mat4,
-// }
 #[derive(Component, Clone, Copy, ExtractComponent, Default, ShaderType)]
 struct Occluder {
     position: Vec4,
@@ -208,7 +256,7 @@ pub struct SDFImage {
     #[uniform(3)]
     occluders: [Occluder; MAX_OCCLUDERS],
     #[uniform(4)]
-    view_proj: Mat4,
+    proj_matrix: Mat4,
     #[cfg(feature = "webgl2")]
     _webgl2_padding: Vec3,
 }
@@ -236,7 +284,7 @@ fn prepare_bind_group(
     let view: &bevy::render::texture::GpuImage = gpu_images.get(&sdf_image.texture).unwrap();
 
     // Convert Mat4 matrices and f32 time into byte slices
-    let view_proj_matrix_bytes = bytemuck::bytes_of(&sdf_image.view_proj);
+    let proj_matrix_bytes = bytemuck::bytes_of(&sdf_image.proj_matrix);
     // let proj_matrix_bytes = bytemuck::bytes_of(&sdf_image.proj_matrix);
     let time_bytes = bytemuck::bytes_of(&sdf_image.time);
     let num_occluders_bytes = bytemuck::bytes_of(&sdf_image.num_occluders);
@@ -263,11 +311,11 @@ fn prepare_bind_group(
         usage: BufferUsages::UNIFORM | BufferUsages::COPY_DST,
     });
 
-    let view_proj_buffer = render_device.create_buffer_with_data(&BufferInitDescriptor {
+    let proj_matrix_buffer = render_device.create_buffer_with_data(&BufferInitDescriptor {
         label: Some("view_proj buffer"),
-        contents: view_proj_matrix_bytes,
+        contents: proj_matrix_bytes,
         usage: BufferUsages::UNIFORM | BufferUsages::COPY_DST,
-    });    
+    });
 
     let bind_group = render_device.create_bind_group(
         None,                                // Label for debugging
@@ -302,18 +350,18 @@ fn prepare_bind_group(
                     // Buffer binding for the time value
                     buffer: &occluder_buffer,
                     offset: 0,
-                    size: None,//NonZeroU64::new(occluders_size as u64)
+                    size: None, //NonZeroU64::new(occluders_size as u64)
                 }),
             },
             BindGroupEntry {
                 binding: 4,
                 resource: BindingResource::Buffer(BufferBinding {
                     // Buffer binding for the time value
-                    buffer: &view_proj_buffer,
+                    buffer: &proj_matrix_buffer,
                     offset: 0,
                     size: None,
                 }),
-            },            
+            },
         ],
     );
 

@@ -251,7 +251,7 @@ impl FromWorld for PostProcessPipeline {
         // Get the shader handle
         let shader = world
             .resource::<AssetServer>()
-            .load("shaders/post_processing.wgsl");
+            .load("shaders/sdf_post_processing.wgsl");
 
         let pipeline_id = world
             .resource_mut::<PipelineCache>()
@@ -318,7 +318,7 @@ fn setup(
             ..default()
         },
         BloomSettings {
-            intensity: 0.5,
+            intensity: 0.65,
             //low_frequency_boost: 0.15,
             //high_pass_frequency: 0.8,
             ..Default::default()

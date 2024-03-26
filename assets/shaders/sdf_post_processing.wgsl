@@ -1,4 +1,5 @@
 #import bevy_core_pipeline::fullscreen_vertex_shader::FullscreenVertexOutput
+#import bevy_light2d::sdf_utils::{sdf_circle}
 
 @group(0) @binding(0) var screen_texture: texture_2d<f32>;
 @group(0) @binding(1) var texture_sampler: sampler;
@@ -19,7 +20,8 @@ struct Light {
     radius: f32,
 };
 
-fn raymarch_light(light_pos: vec2<f32>, pixel_pos: vec2<f32>, max_steps: i32, max_distance: f32, light_radius: f32) -> f32 {
+
+fn raymarch_light(light_pos: vec2<f32>, pixel_pos: vec2<f32>, max_steps: i32, light_radius: f32, aspect: f32) -> f32 {
     let light_dir = normalize(light_pos - pixel_pos);
     let max_ray_len = length(light_pos - pixel_pos);
     var p = pixel_pos;
@@ -27,39 +29,34 @@ fn raymarch_light(light_pos: vec2<f32>, pixel_pos: vec2<f32>, max_steps: i32, ma
     var max_obstruction = 0.0;
 
     for (var i = 0; i < max_steps; i = i + 1) {
-        // Pre-sample texture
-        let sdf_sample = textureSample(sdf_texture, texture_sampler, p).r * 0.5;
+        let sdf_sample = textureSample(sdf_texture, texture_sampler, p).r * 0.25;
 
-        // Calculate next position and distance without updating them immediately
         let next_p = p + light_dir * max(sdf_sample, 0.001);
         let next_total_distance = total_distance + length(next_p - p);
 
-        // Use a uniform condition to decide whether to update
-        let should_update = (next_total_distance <= max_distance) && (length(next_p - light_pos) >= light_radius)
-        &&  (next_total_distance < max_ray_len);
-        // Conditionally update ray marching variables based on the uniform condition
-        if (should_update) {
+        let should_update =  (next_total_distance < max_ray_len);
+        if should_update {
             p = next_p;
             total_distance = next_total_distance;
 
-            //if (sdf_sample < 0.0025)
-            {
-                let obstruction = clamp(1.0 - sdf_sample * 2.0 / light_radius, 0.0, 1.0);
-                //let obstruction = clamp(1.0 - sdf_sample * 48.0 / light_radius, 0.0, 1.0); 
-                max_obstruction = max(max_obstruction, obstruction);
-            }
+            let obstruction = (1.0 - (sdf_sample+0.002) * 8.0 / light_radius);
+            max_obstruction = max(max_obstruction, obstruction);
         }
     }
 
-    let d = length(light_pos - pixel_pos);
-    let attenuation = 8.0 / (1.0 + 20.0 * d + 2500.0 * d * d);
+    let adjusted_pixel_pos = vec2(pixel_pos.x, pixel_pos.y / aspect);
+    let adjusted_light_pos = vec2(light_pos.x, light_pos.y / aspect);
+
+    let d = length(adjusted_light_pos - adjusted_pixel_pos);
+    let attenuation = 32.0 / (1.0 + 20.0 * d + 2500.0 * d * d);
+
     return max(0.0, (1.0 - max_obstruction) * attenuation);
 }
 
 
 @fragment
 fn fragment(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
-    
+
     var lights: array<Light, 4> = array<Light,4>(
         Light(vec2<f32>(0.25, 0.25), vec3<f32>(1.0, 0.25, 0.25), 1.0, 0.05),
         Light(vec2<f32>(0.75, 0.65), vec3<f32>(0.2, 0.37, 0.8), 1.0, 0.05),
@@ -69,27 +66,32 @@ fn fragment(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
 
     let offset_strength = settings.intensity;
     let unlit = textureSample(screen_texture, texture_sampler, in.uv);
-    let spos = in.uv - vec2<f32>(0.5, 0.5) * 2.0;
+    // let spos = in.uv - vec2<f32>(0.5, 0.5) * 2.0;
     let sdf_value = textureSample(sdf_texture, texture_sampler, in.uv).r;
     let ambient = 0.01;
-
+    let aspect = f32(1920.0) / f32(1080.0);
     var color = vec3<f32>(0.0, 0.0, 0.0);
 
-    //if (sdf_value < 0.0) { // Check if the fragment is inside an object based on SDF
-    let base_col = select (0.0, 0.5, sdf_value < 0.0);//     // The fragment is inside an object, consider it fully lit
-    color = vec3<f32>(base_col,base_col,base_col); // Add full light color for each light
-    // } else {
-        // The fragment is outside, compute lighting normally
-    let multiplier = select (0.0,1.0, sdf_value > 0.0);
+    let base_col = select(0.0, 0.5, sdf_value < 0.0);//     // The fragment is inside an object, consider it fully lit
+    color = vec3<f32>(base_col, base_col, base_col); // Add full light color for each light
+    let multiplier = select(0.0, 1.0, sdf_value > 0.0);
     for (var i = 0; i < 4; i = i + 1) {
-        let light_contribution = raymarch_light(lights[i].position, in.uv, 16, 32.0, 0.0125);
+        let light_contribution = raymarch_light(lights[i].position, in.uv, 32, 0.025, aspect);
         color += lights[i].color * light_contribution * multiplier;
     }
-    // }
     return vec4<f32>(
         unlit.r * (color.r + ambient),
         unlit.g * (color.g + ambient),
         unlit.b * (color.b + ambient),
         1.0
     );
+
+    // var col = select(vec4<f32>(0.99, 0.6, 0.06, 1.0), vec4<f32>(0.15, 0.35, 1.0, 0.9), sdf_value > 0.0);
+
+    // col *= 1.0 - exp(-8.0 * abs(sdf_value));
+    // col *= 0.8 + 0.2 * cos(256.0 * abs(sdf_value));
+    // col = mix(col, vec4<f32>(1.0), 1.0 - smoothstep(0.0, 0.0015, abs(sdf_value)));
+    // col.a = 1.0;
+
+    // return col;
 }
