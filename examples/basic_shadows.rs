@@ -1,11 +1,6 @@
 use bevy::{prelude::*, sprite::{MaterialMesh2dBundle, Mesh2dHandle}, window::WindowResolution};
 use iyes_perf_ui::{PerfUiCompleteBundle, PerfUiPlugin};
 use lighting::{light2d_plugin::{Occluder, SDFComputePlugin, SDFVisualizer}, postprocess_plugin::PostProcessPlugin};
-// mod plugins;
-// use plugins::{
-//     init_game_plugin::InitGamePlugin, light2d::light2d_plugin::SDFComputePlugin,
-//     light2d::postprocess_plugin::PostProcessPlugin,
-// };
 
 const TEST_OCCLUDERS: usize = 24;
 
@@ -90,12 +85,10 @@ fn setup(
 
 fn animate_sprites(
     time: Res<Time>,
-    //mut query: Query<&mut Transform, (With<Sprite>, Without<SDFVisualizer>)>,
     mut query: Query<&mut Transform, With<Occluder>>,
 ) {
     let mut i = 0.0;
     for mut transform in &mut query.iter_mut() {
-        //transform.rotate(Quat::from_rotation_z(time.delta_seconds()));
         let mut x = ((time.elapsed_seconds() + i) * 0.5).sin() * 400.0;
         let mut y = ((time.elapsed_seconds() + i) * 0.5).cos() * 300.0;
 

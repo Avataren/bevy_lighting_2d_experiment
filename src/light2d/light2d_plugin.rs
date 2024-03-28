@@ -68,13 +68,7 @@ pub const SHADER_GI_CAMERA: Handle<Shader> =
 
 impl Plugin for SDFComputePlugin {
     fn build(&self, app: &mut App) {
-        // Extract the resources from the main world into the render world
-        // for operation on by the compute shader and display on the sprite.
         app.add_plugins(ExtractResourcePlugin::<SDFImage>::default())
-            // .add_plugins((
-            //     ExtractComponentPlugin::<CameraData>::default(),
-            //     UniformComponentPlugin::<CameraData>::default()
-            // ))
             .add_systems(Startup, setup)
             .add_systems(Update, (update_camera_data, update_time));
 
@@ -113,7 +107,6 @@ fn update_camera_data(
     mut cam_q: Query<(&Camera, &mut Transform), Without<Occluder>>,
     sprite_query: Query<(&mut Transform, &Occluder)>,
     mut sdf_data: ResMut<SDFImage>,
-    //occ_q: Query<&Occluder>,
     _time: Res<Time>,
 ) {
     for (cam, transform) in &mut cam_q {
@@ -123,7 +116,6 @@ fn update_camera_data(
         sdf_data.proj_matrix = view_proj_matrix;
         let scale = extract_scale_from_matrix(&view_proj_matrix) * 0.5;
         let scale_geom_mean = f32::sqrt(scale.x * scale.y);
-        //println!("Scale: {:?}", scale);
         let transformed_occ = sprite_query.iter().map(|(transform, occ)| {
             let pos = view_proj_matrix * transform.translation.extend(1.0);
             let occ_size = occ.data.xy() * scale.xy();
@@ -185,16 +177,11 @@ fn prepare_bind_group(
     _world: &World,
 ) {
     let view: &bevy::render::texture::GpuImage = gpu_images.get(&sdf_image.texture).unwrap();
-
-    // Convert Mat4 matrices and f32 time into byte slices
     let proj_matrix_bytes = bytemuck::bytes_of(&sdf_image.proj_matrix);
-    // let proj_matrix_bytes = bytemuck::bytes_of(&sdf_image.proj_matrix);
     let time_bytes = bytemuck::bytes_of(&sdf_image.time);
     let num_occluders_bytes = bytemuck::bytes_of(&sdf_image.num_occluders);
     let occluder_slice: &[Occluder] = &sdf_image.occluders;
     let occluder_bytes: &[u8] = bytemuck::cast_slice(occluder_slice);
-    //let occluders_size = std::mem::size_of::<Occluder>() * sdf_image.occluders.len();
-    //let _buffer_size = std::mem::size_of::<Occluder>() * MAX_OCCLUDERS;
 
     let time_buffer = render_device.create_buffer_with_data(&BufferInitDescriptor {
         label: Some("time buffer"),
