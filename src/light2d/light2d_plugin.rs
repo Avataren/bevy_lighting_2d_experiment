@@ -13,11 +13,11 @@ use bevy::{
         RenderApp,
         RenderSet,
     },
-    sprite::{MaterialMesh2dBundle, Mesh2d, Mesh2dHandle},
+    sprite::{MaterialMesh2dBundle, Mesh2dHandle},
 };
 use std::borrow::Cow;
 
-const SIZE: (u32, u32) = (1920, 1080);
+const SDF_TEXTURE_SIZE: (u32, u32) = (1920, 1080);
 const WORKGROUP_SIZE: u32 = 8;
 const MAX_OCCLUDERS: usize = 256;
 const TEST_OCCLUDERS: usize = 24;
@@ -33,8 +33,8 @@ fn setup(
 ) {
     let mut image = Image::new_fill(
         Extent3d {
-            width: SIZE.0,
-            height: SIZE.1,
+            width: SDF_TEXTURE_SIZE.0,
+            height: SDF_TEXTURE_SIZE.1,
             depth_or_array_layers: 1,
         },
         TextureDimension::D2,
@@ -45,8 +45,6 @@ fn setup(
     image.texture_descriptor.usage =
         TextureUsages::COPY_DST | TextureUsages::STORAGE_BINDING | TextureUsages::TEXTURE_BINDING;
     let image = images.add(image);
-
-    //commands.spawn(CameraData::default());
 
     commands
         .spawn(SpriteBundle {
@@ -59,30 +57,6 @@ fn setup(
             ..default()
         })
         .insert(SDFVisualizer);
-
-    //commands.spawn(Camera2dBundle::default());
-
-    // for i in 0..TEST_OCCLUDERS {
-    //     commands
-    //         .spawn(SpriteBundle {
-    //             sprite: Sprite {
-    //                 custom_size: Some(Vec2::new(50.0, 50.0)),
-    //                 color: Color::rgba(0.25, 0.25, 0.25, 1.0),
-    //                 ..default()
-    //             },
-    //             transform: Transform::from_translation(Vec3::new(
-    //                 (i as f32 * 110.0) - 800.0,
-    //                 i as f32 * 20.0,
-    //                 0.0,
-    //             )),
-    //             visibility: Visibility::Visible,
-    //             ..default()
-    //         })
-    //         .insert(Occluder {
-    //             position: Vec4::new((i as f32 * 110.0) - 800.0, i as f32 * 20.0, 0.0, 0.0),
-    //             data: Vec4::new(100.0, 100.0, (i%2) as f32, 50.0),
-    //         });
-    // }
 
     let shapes = [
         Mesh2dHandle(meshes.add(Rectangle::new(50.0, 50.0))),
@@ -465,14 +439,14 @@ impl render_graph::Node for SDFNode {
                     .get_compute_pipeline(pipeline.init_pipeline)
                     .unwrap();
                 pass.set_pipeline(init_pipeline);
-                pass.dispatch_workgroups(SIZE.0 / WORKGROUP_SIZE, SIZE.1 / WORKGROUP_SIZE, 1);
+                pass.dispatch_workgroups(SDF_TEXTURE_SIZE.0 / WORKGROUP_SIZE, SDF_TEXTURE_SIZE.1 / WORKGROUP_SIZE, 1);
             }
             SDFState::Update => {
                 let update_pipeline = pipeline_cache
                     .get_compute_pipeline(pipeline.update_pipeline)
                     .unwrap();
                 pass.set_pipeline(update_pipeline);
-                pass.dispatch_workgroups(SIZE.0 / WORKGROUP_SIZE, SIZE.1 / WORKGROUP_SIZE, 1);
+                pass.dispatch_workgroups(SDF_TEXTURE_SIZE.0 / WORKGROUP_SIZE, SDF_TEXTURE_SIZE.1 / WORKGROUP_SIZE, 1);
             }
         }
 
