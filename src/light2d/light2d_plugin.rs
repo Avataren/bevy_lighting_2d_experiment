@@ -13,23 +13,19 @@ use bevy::{
         RenderApp,
         RenderSet,
     },
-    sprite::{MaterialMesh2dBundle, Mesh2dHandle},
 };
 use std::borrow::Cow;
 
 const SDF_TEXTURE_SIZE: (u32, u32) = (1920, 1080);
 const WORKGROUP_SIZE: u32 = 8;
 const MAX_OCCLUDERS: usize = 256;
-const TEST_OCCLUDERS: usize = 24;
+
 #[derive(Component, Clone, Copy, Debug, Default)]
-struct SDFVisualizer;
+pub struct SDFVisualizer;
 
 fn setup(
     mut commands: Commands,
     mut images: ResMut<Assets<Image>>,
-    mut meshes: ResMut<Assets<Mesh>>,
-    mut materials: ResMut<Assets<ColorMaterial>>,
-    asset_server: ResMut<AssetServer>,
 ) {
     let mut image = Image::new_fill(
         Extent3d {
@@ -45,42 +41,6 @@ fn setup(
     image.texture_descriptor.usage =
         TextureUsages::COPY_DST | TextureUsages::STORAGE_BINDING | TextureUsages::TEXTURE_BINDING;
     let image = images.add(image);
-
-    commands
-        .spawn(SpriteBundle {
-            sprite: Sprite {
-                custom_size: Some(Vec2::new(1920 as f32, 1080 as f32)),
-                ..default()
-            },
-            //texture: image.clone(),
-            texture: asset_server.load("floor.png"),
-            ..default()
-        })
-        .insert(SDFVisualizer);
-
-    let shapes = [
-        Mesh2dHandle(meshes.add(Rectangle::new(50.0, 50.0))),
-        Mesh2dHandle(meshes.add(Circle { radius: 25.0 })),
-    ];
-
-    for i in 0..TEST_OCCLUDERS {
-        let color = Color::hsl(360. * i as f32 / TEST_OCCLUDERS as f32, 0.95, 0.7);
-        commands
-            .spawn(MaterialMesh2dBundle {
-                mesh: shapes[i % 2].clone(),
-                material: materials.add(color),
-                transform: Transform::from_xyz(
-                    (i as f32) * 50.0,
-                    0.0,
-                    (i as f32) / TEST_OCCLUDERS as f32 + 0.1,
-                ),
-                ..default()
-            })
-            .insert(Occluder {
-                position: Vec4::new(0.0, 0.0, 0.0, 0.0),
-                data: Vec4::new(50.0, 50.0, (i % 2) as f32, 25.0 * 1.5),
-            });
-    }
 
     commands.insert_resource(SDFImage {
         texture: image,
@@ -116,7 +76,7 @@ impl Plugin for SDFComputePlugin {
             //     UniformComponentPlugin::<CameraData>::default()
             // ))
             .add_systems(Startup, setup)
-            .add_systems(Update, (update_camera_data, update_time, animate_sprites));
+            .add_systems(Update, (update_camera_data, update_time));
 
         load_internal_asset!(
             app,
@@ -147,28 +107,6 @@ fn extract_scale_from_matrix(matrix: &Mat4) -> Vec3 {
     let scale_y = matrix.y_axis.length();
     let scale_z = matrix.z_axis.length();
     Vec3::new(scale_x, scale_y, scale_z)
-}
-
-fn animate_sprites(
-    time: Res<Time>,
-    //mut query: Query<&mut Transform, (With<Sprite>, Without<SDFVisualizer>)>,
-    mut query: Query<&mut Transform, With<Occluder>>,
-) {
-    let mut i = 0.0;
-    for mut transform in &mut query.iter_mut() {
-        //transform.rotate(Quat::from_rotation_z(time.delta_seconds()));
-        let mut x = ((time.elapsed_seconds() + i) * 0.5).sin() * 400.0;
-        let mut y = ((time.elapsed_seconds() + i) * 0.5).cos() * 300.0;
-
-        x += ((time.elapsed_seconds() * 1.5 + i * 0.5) * 0.5).cos() * 3.0;
-        y += ((time.elapsed_seconds() * 1.75 + i * 0.25) * 0.5).sin() * 200.0;
-
-        x += ((time.elapsed_seconds() * 2.5 + i * 1.5) * 0.5).cos() * 200.0;
-        y += ((time.elapsed_seconds() * 2.75 + i * 1.25) * 0.5).sin() * 100.0;
-
-        i += 1.0;
-        transform.translation = Vec3::new(x, y, i * 0.1 + 0.1);
-    }
 }
 
 fn update_camera_data(
@@ -210,9 +148,9 @@ fn update_camera_data(
 }
 
 #[derive(Component, Clone, Copy, ExtractComponent, Default, ShaderType)]
-struct Occluder {
-    position: Vec4,
-    data: Vec4,
+pub struct Occluder {
+    pub position: Vec4,
+    pub data: Vec4,
 }
 
 unsafe impl bytemuck::Pod for Occluder {}
