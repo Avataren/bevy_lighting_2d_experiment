@@ -16,6 +16,18 @@ fn screen_to_ndc(
     return (screen_pose_f32 / screen_size) * 2.0 - 1.0;
 }
 
+fn visualize_sdf(sdf_value:f32) -> vec4<f32>
+{
+    var col = select(vec4<f32>(0.99, 0.6, 0.06, 1.0), vec4<f32>(0.15, 0.35, 1.0, 0.9), sdf_value > 0.0);
+
+    col *= 1.0 - exp(-8.0 * abs(sdf_value));
+    col *= 0.8 + 0.2 * cos(256.0 * abs(sdf_value));
+    col = mix(col, vec4<f32>(1.0), 1.0 - smoothstep(0.0, 0.0015, abs(sdf_value)));
+    col.a = 1.0;
+
+    return col;    
+}
+
 fn sdf_circle(p: vec2<f32>, r: f32, aspect: f32) -> f32
 {
     let adjusted_p = vec2(p.x, p.y / aspect);

@@ -13,6 +13,7 @@ use bevy::{
         RenderApp,
         RenderSet,
     },
+    window::WindowResized,
 };
 use std::borrow::Cow;
 
@@ -20,13 +21,21 @@ const SDF_TEXTURE_SIZE: (u32, u32) = (1920, 1080);
 const WORKGROUP_SIZE: u32 = 8;
 const MAX_OCCLUDERS: usize = 256;
 
+#[derive(Resource, ExtractResource, Clone)]
+struct ScreenResolution {
+    pub width: u32,
+    pub height: u32,
+}
+
 #[derive(Component, Clone, Copy, Debug, Default)]
 pub struct SDFVisualizer;
 
-fn setup(
-    mut commands: Commands,
-    mut images: ResMut<Assets<Image>>,
-) {
+fn setup(mut commands: Commands, mut images: ResMut<Assets<Image>>) {
+    commands.insert_resource(ScreenResolution {
+        width: 1920,
+        height: 1080,
+    });
+
     let mut image = Image::new_fill(
         Extent3d {
             width: SDF_TEXTURE_SIZE.0,
@@ -69,8 +78,9 @@ pub const SHADER_GI_CAMERA: Handle<Shader> =
 impl Plugin for SDFComputePlugin {
     fn build(&self, app: &mut App) {
         app.add_plugins(ExtractResourcePlugin::<SDFImage>::default())
+            .add_plugins(ExtractResourcePlugin::<ScreenResolution>::default())
             .add_systems(Startup, setup)
-            .add_systems(Update, (update_camera_data, update_time));
+            .add_systems(Update, (update_camera_data, update_time, handle_resize));
 
         load_internal_asset!(
             app,
@@ -101,6 +111,36 @@ fn extract_scale_from_matrix(matrix: &Mat4) -> Vec3 {
     let scale_y = matrix.y_axis.length();
     let scale_z = matrix.z_axis.length();
     Vec3::new(scale_x, scale_y, scale_z)
+}
+
+fn handle_resize(
+    mut resize_reader: EventReader<WindowResized>,
+    mut images: ResMut<Assets<Image>>,
+    mut sdf_image: ResMut<SDFImage>,
+    mut screen_res: ResMut<ScreenResolution>,
+) {
+    for e in resize_reader.read() {
+        screen_res.width = e.width as u32;
+        screen_res.height = e.height as u32;
+
+        let mut image = Image::new_fill(
+            Extent3d {
+                width: screen_res.width,
+                height: screen_res.height,
+                depth_or_array_layers: 1,
+            },
+            TextureDimension::D2,
+            &[0, 0, 0, 255],
+            TextureFormat::R32Float,
+            RenderAssetUsages::RENDER_WORLD,
+        );
+        images.remove(sdf_image.texture.id());
+        image.texture_descriptor.usage = TextureUsages::COPY_DST
+            | TextureUsages::STORAGE_BINDING
+            | TextureUsages::TEXTURE_BINDING;
+        let image = images.add(image);
+        sdf_image.texture = image;
+    }
 }
 
 fn update_camera_data(
@@ -349,7 +389,7 @@ impl render_graph::Node for SDFNode {
         let texture_bind_group = &world.resource::<SDFImageBindGroup>().0;
         let pipeline_cache = world.resource::<PipelineCache>();
         let pipeline = world.resource::<SDFPipeline>();
-
+        let screen_res = world.resource::<ScreenResolution>();
         let mut pass = render_context
             .command_encoder()
             .begin_compute_pass(&ComputePassDescriptor::default());
@@ -364,14 +404,22 @@ impl render_graph::Node for SDFNode {
                     .get_compute_pipeline(pipeline.init_pipeline)
                     .unwrap();
                 pass.set_pipeline(init_pipeline);
-                pass.dispatch_workgroups(SDF_TEXTURE_SIZE.0 / WORKGROUP_SIZE, SDF_TEXTURE_SIZE.1 / WORKGROUP_SIZE, 1);
+                pass.dispatch_workgroups(
+                    screen_res.width / WORKGROUP_SIZE,
+                    screen_res.height / WORKGROUP_SIZE,
+                    1,
+                );
             }
             SDFState::Update => {
                 let update_pipeline = pipeline_cache
                     .get_compute_pipeline(pipeline.update_pipeline)
                     .unwrap();
                 pass.set_pipeline(update_pipeline);
-                pass.dispatch_workgroups(SDF_TEXTURE_SIZE.0 / WORKGROUP_SIZE, SDF_TEXTURE_SIZE.1 / WORKGROUP_SIZE, 1);
+                pass.dispatch_workgroups(
+                    screen_res.width / WORKGROUP_SIZE,
+                    screen_res.height / WORKGROUP_SIZE,
+                    1,
+                );
             }
         }
 

@@ -305,8 +305,7 @@ fn setup(
     // camera
     commands.spawn((
         Camera2dBundle {
-            transform: Transform::from_translation(Vec3::new(0.0, 0.0, 5.0)),
-            //     .looking_at(Vec3::default(), Vec3::Y),
+            transform: Transform::from_translation(Vec3::new(0.0, 0.0, 0.0)),
             camera: Camera {
                 clear_color: Color::BLACK.into(),
                 hdr: true,
@@ -316,13 +315,13 @@ fn setup(
             ..default()
         },
         BloomSettings {
-            intensity: 0.65,
+            intensity: 0.5,
             //low_frequency_boost: 0.15,
             //high_pass_frequency: 0.8,
             ..Default::default()
         },
         // Add the setting to the camera.
-        // This component is also used to determine on which camera to run the post processing effect.
+        // // This component is also used to determine on which camera to run the post processing effect.
         PostProcessSettings {
             intensity: 0.0,
             ..default()
